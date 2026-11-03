@@ -1,0 +1,99 @@
+{
+  "id": "lendloopNotify01",
+  "name": "LendLoop: Loan request notification",
+  "active": false,
+  "settings": { "executionOrder": "v1", "errorWorkflow": "lendloopErrors01" },
+  "nodes": [
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000001",
+      "name": "Loan event webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "5a0c1f7e-6d2b-4c1e-9a51-1e0e3f2a7b01",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-event",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      }
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000002",
+      "name": "Verify signature and dedupe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "jsCode": "// Verifies the HMAC Convex put on the raw request body, rejects stale\n// timestamps (replay), and drops events this workflow already handled.\nconst crypto = require('crypto');\nconst secret = $env.CONVEX_TO_N8N_SECRET;\nif (!secret) throw new Error('CONVEX_TO_N8N_SECRET is not set');\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst timestamp = String(headers['x-lendloop-timestamp'] || '');\nconst signature = String(headers['x-lendloop-signature'] || '');\nconst raw = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\n\nconst fresh = /^\\d+$/.test(timestamp) && Math.abs(Date.now() / 1000 - Number(timestamp)) <= 300;\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${raw}`).digest();\nconst given = /^[0-9a-f]{64}$/i.test(signature) ? Buffer.from(signature, 'hex') : Buffer.alloc(0);\nconst valid = fresh && given.length === expected.length && crypto.timingSafeEqual(given, expected);\nif (!valid) return [{ json: { valid: false } }];\n\nconst payload = JSON.parse(raw);\n// Remember recent idempotency keys so a Convex retry after a lost response\n// does not notify the same person twice. Static data persists for active workflows.\nconst store = $getWorkflowStaticData('global');\nstore.seen = store.seen || {};\nconst duplicate = Boolean(store.seen[payload.idempotencyKey]);\nconst cutoff = Date.now() - 7 * 24 * 3600 * 1000;\nfor (const [key, at] of Object.entries(store.seen)) if (at < cutoff) delete store.seen[key];\nstore.seen[payload.idempotencyKey] = Date.now();\n\nreturn [{ json: { valid: true, duplicate, payload } }];"
+      }
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000003",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c0ffee00-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000004",
+      "name": "Send notification (mock)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, -100],
+      "parameters": {
+        "jsCode": "// Mock delivery: logs the message instead of emailing. Swap this node for\n// Send Email / Slack / Discord with an n8n credential to go live.\n// Uses only the fields it needs: recipient name + email, tool, dates, status.\nconst { valid, duplicate, payload } = $input.first().json;\nif (duplicate) return [{ json: { delivered: false, reason: 'duplicate', key: payload.idempotencyKey } }];\n\nconst { recipient, toolName, status, startDate, endDate } = payload;\nconst lines = {\n  pending: `New request to borrow your ${toolName} (${startDate} to ${endDate}).`,\n  approved: `Good news: your request for the ${toolName} was approved (${startDate} to ${endDate}). Pickup details are in the LendLoop app.`,\n  declined: `Your request for the ${toolName} was declined.`,\n  cancelled: status === 'cancelled' && recipient.role === 'owner'\n    ? `A request for your ${toolName} was cancelled.`\n    : `Your request for the ${toolName} was cancelled.`,\n  returned: `Thanks! The ${toolName} was marked as returned.`,\n};\nconst message = { to: recipient.email, subject: `LendLoop: ${toolName}`, text: `Hi ${recipient.name}, ${lines[status] || `Update on the ${toolName}: ${status}.`}` };\nconsole.log('[LendLoop notification]', JSON.stringify(message));\nreturn [{ json: { delivered: true, key: payload.idempotencyKey, message } }];"
+      }
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000005",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [960, -100],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, delivered: $json.delivered } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "b1c2d3e4-0001-4000-8000-000000000006",
+      "name": "Respond 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [720, 100],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'Unauthorized' } }}",
+        "options": { "responseCode": 401 }
+      }
+    }
+  ],
+  "connections": {
+    "Loan event webhook": { "main": [[{ "node": "Verify signature and dedupe", "type": "main", "index": 0 }]] },
+    "Verify signature and dedupe": { "main": [[{ "node": "Signature valid?", "type": "main", "index": 0 }]] },
+    "Signature valid?": {
+      "main": [
+        [{ "node": "Send notification (mock)", "type": "main", "index": 0 }],
+        [{ "node": "Respond 401", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send notification (mock)": { "main": [[{ "node": "Respond 200", "type": "main", "index": 0 }]] }
+  }
+}

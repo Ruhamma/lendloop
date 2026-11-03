@@ -1,0 +1,122 @@
+{
+  "id": "lendloopRemind01",
+  "name": "LendLoop: Daily overdue reminders",
+  "active": false,
+  "settings": { "executionOrder": "v1", "errorWorkflow": "lendloopErrors01" },
+  "nodes": [
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000001",
+      "name": "Every day at 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "triggerAtHour": 9 }] } }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000002",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": {}
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000003",
+      "name": "Sign fetch request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 100],
+      "parameters": {
+        "jsCode": "// GET has an empty body, so the signature covers `${timestamp}.`\nconst crypto = require('crypto');\nconst secret = $env.N8N_TO_CONVEX_SECRET;\nif (!secret) throw new Error('N8N_TO_CONVEX_SECRET is not set');\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000004",
+      "name": "Fetch overdue loans",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "url": "={{ $env.CONVEX_SITE_URL }}/n8n/overdue-loans",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-LendLoop-Timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "X-LendLoop-Signature", "value": "={{ $json.signature }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000005",
+      "name": "One item per loan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 100],
+      "parameters": {
+        "jsCode": "const { loans = [] } = $input.first().json;\nreturn loans.map((loan) => ({ json: loan }));"
+      }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000006",
+      "name": "Send reminder (mock)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 100],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Mock delivery: logs instead of emailing. Swap for Send Email / Slack / Discord\n// with an n8n credential. A failed send is reported back as status \"failed\".\nconst loan = $json;\ntry {\n  const message = {\n    to: loan.borrower.email,\n    subject: `Reminder: please return the ${loan.toolName}`,\n    text: `Hi ${loan.borrower.name}, the ${loan.toolName} was due back on ${loan.dueDate} (${loan.daysOverdue} day${loan.daysOverdue === 1 ? '' : 's'} ago). Please return it or message the owner.`,\n  };\n  console.log('[LendLoop reminder]', JSON.stringify(message));\n  return { json: { loanId: loan.loanId, reminderKey: loan.reminderKey, status: 'sent', detail: 'Reminder sent (mock)' } };\n} catch (error) {\n  return { json: { loanId: loan.loanId, reminderKey: loan.reminderKey, status: 'failed', detail: String(error.message).slice(0, 200) } };\n}"
+      }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000007",
+      "name": "Sign write-back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 100],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Sign the exact string we send, so Convex verifies the bytes it receives.\nconst crypto = require('crypto');\nconst secret = $env.N8N_TO_CONVEX_SECRET;\nconst body = JSON.stringify({ loanId: $json.loanId, reminderKey: $json.reminderKey, status: $json.status, detail: $json.detail });\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');\nreturn { json: { body, timestamp, signature } };"
+      }
+    },
+    {
+      "id": "c2d3e4f5-0002-4000-8000-000000000008",
+      "name": "Write reminder status to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/n8n/reminder-status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-LendLoop-Timestamp", "value": "={{ $json.timestamp }}" },
+            { "name": "X-LendLoop-Signature", "value": "={{ $json.signature }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every day at 09:00": { "main": [[{ "node": "Sign fetch request", "type": "main", "index": 0 }]] },
+    "Run manually": { "main": [[{ "node": "Sign fetch request", "type": "main", "index": 0 }]] },
+    "Sign fetch request": { "main": [[{ "node": "Fetch overdue loans", "type": "main", "index": 0 }]] },
+    "Fetch overdue loans": { "main": [[{ "node": "One item per loan", "type": "main", "index": 0 }]] },
+    "One item per loan": { "main": [[{ "node": "Send reminder (mock)", "type": "main", "index": 0 }]] },
+    "Send reminder (mock)": { "main": [[{ "node": "Sign write-back", "type": "main", "index": 0 }]] },
+    "Sign write-back": { "main": [[{ "node": "Write reminder status to Convex", "type": "main", "index": 0 }]] }
+  }
+}

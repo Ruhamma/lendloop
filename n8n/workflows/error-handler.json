@@ -1,0 +1,29 @@
+{
+  "id": "lendloopErrors01",
+  "name": "LendLoop: Error handler",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "d3e4f5a6-0003-4000-8000-000000000001",
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "d3e4f5a6-0003-4000-8000-000000000002",
+      "name": "Report failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "jsCode": "// Runs whenever a LendLoop workflow fails after its retries, so nothing fails silently.\n// Always logs; also posts to a chat webhook (Slack/Discord) when ALERT_WEBHOOK_URL is set.\nconst { workflow, execution } = $input.first().json;\nconst alert = {\n  workflow: workflow?.name,\n  executionId: execution?.id,\n  failedNode: execution?.lastNodeExecuted,\n  error: execution?.error?.message,\n  url: execution?.url,\n};\nconsole.error('[LendLoop automation failed]', JSON.stringify(alert));\nconst hook = $env.ALERT_WEBHOOK_URL;\nif (hook) {\n  const text = `LendLoop automation failed: ${alert.workflow} at \"${alert.failedNode}\": ${alert.error}\\n${alert.url ?? ''}`;\n  await this.helpers.httpRequest({ method: 'POST', url: hook, json: true, body: { content: text, text } });\n}\nreturn [{ json: alert }];"
+      }
+    }
+  ],
+  "connections": {
+    "On workflow error": { "main": [[{ "node": "Report failure", "type": "main", "index": 0 }]] }
+  }
+}

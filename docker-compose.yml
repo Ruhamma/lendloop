@@ -1,0 +1,24 @@
+# Self-hosted n8n for LendLoop's automations.
+#   cp .env.n8n.example .env.n8n   # fill in secrets
+#   ./scripts/n8n-setup.sh         # import + activate the workflows, then start
+services:
+  n8n:
+    image: n8nio/n8n:2.46.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678" # only reachable from this machine
+    env_file: .env.n8n
+    environment:
+      # Code nodes read the shared HMAC secrets from the environment and use Node's crypto.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+volumes:
+  n8n_data:
