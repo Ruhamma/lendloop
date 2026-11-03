@@ -13,11 +13,11 @@ async function RequireSignIn({ children }: { children: ReactNode }) {
 export default function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
   return (
     <Suspense
-      fallback={<p className="mx-auto w-full max-w-4xl px-4 py-8 text-stone-500">Loading…</p>}
+      fallback={<p className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 text-muted">Loading…</p>}
     >
       <RequireSignIn>
         <UserGate>
-          <div className="mx-auto w-full max-w-4xl px-4 py-8">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
             <Header />
             {children}
           </div>

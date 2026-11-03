@@ -14,6 +14,6 @@ export function UserGate({ children }: { children: ReactNode }) {
     store().then(() => setStored(true));
   }, [isAuthenticated, store]);
 
-  if (!stored) return <p className="mx-auto w-full max-w-4xl px-4 py-8 text-stone-500">Loading…</p>;
+  if (!stored) return <p className="mx-auto w-full max-w-6xl px-4 py-6 text-muted">Loading…</p>;
   return children;
 }

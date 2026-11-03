@@ -54,7 +54,7 @@ export function BookingCalendar({
             </p>
             <div className="grid grid-cols-7 gap-1 text-center text-xs">
               {WEEKDAYS.map((d) => (
-                <span key={d} className="text-stone-400">
+                <span key={d} className="text-muted">
                   {d}
                 </span>
               ))}
@@ -62,12 +62,12 @@ export function BookingCalendar({
                 if (!day) return <span key={`pad-${i}`} />;
                 const booking = booked(day);
                 const tone = booking
-                  ? "bg-amber-100 text-amber-900"
+                  ? "bg-warn-soft text-warn"
                   : selected(day)
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-brand text-white"
                     : day < today
-                      ? "text-stone-300"
-                      : "text-stone-700";
+                      ? "text-muted/40"
+                      : "text-ink";
                 return (
                   <span
                     key={day}
@@ -76,7 +76,7 @@ export function BookingCalendar({
                         ? `Booked${booking.borrowerName ? ` by ${booking.borrowerName}` : ""}`
                         : undefined
                     }
-                    className={`rounded py-1 ${tone} ${day === today ? "ring-1 ring-stone-400" : ""}`}
+                    className={`rounded py-1 ${tone} ${day === today ? "ring-1 ring-brand" : ""}`}
                   >
                     {Number(day.slice(8))}
                   </span>
@@ -86,13 +86,12 @@ export function BookingCalendar({
           </div>
         ))}
       </div>
-      <div className="mt-3 flex gap-4 text-xs text-stone-500">
+      <div className="mt-3 flex gap-4 text-xs text-muted">
         <span>
-          <span className="mr-1 inline-block h-3 w-3 rounded bg-amber-100 align-middle" /> Booked
+          <span className="mr-1 inline-block h-3 w-3 rounded bg-warn-soft align-middle" /> Booked
         </span>
         <span>
-          <span className="mr-1 inline-block h-3 w-3 rounded bg-emerald-600 align-middle" /> Your
-          dates
+          <span className="mr-1 inline-block h-3 w-3 rounded bg-brand align-middle" /> Your dates
         </span>
       </div>
     </div>

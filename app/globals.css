@@ -1,17 +1,65 @@
 @import "tailwindcss";
+@import "@fontsource/young-serif";
+@import "@fontsource-variable/atkinson-hyperlegible-next";
 
-:root {
-  --background: #fafaf7;
-  --foreground: #1c1c1a;
-}
+/*
+ * LendLoop design tokens, "library card": stamp-ink indigo on cool paper, with the red of
+ * the tag's string as a sparing accent (icons, badges, large text; never body copy).
+ * Contrast (WCAG): ink on paper 15.5:1, muted on paper 4.8:1, white on brand 9.2:1,
+ * brand on paper 8.6:1. Accent on paper is 3.8:1, so it is never used for small text.
+ */
+@theme {
+  --color-paper: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-ink: #1b1a3a;
+  --color-ink-soft: #46456e;
+  --color-muted: #6b6c80;
+  --color-line: #dcdde8;
+  --color-brand: #3a36a8;
+  --color-brand-hover: #2e2a8c;
+  --color-brand-soft: #e4e3f7;
+  --color-accent: #e2462f;
+  --color-accent-soft: #fce9e6;
+  --color-ok: #127a4a;
+  --color-ok-soft: #e7f6ee;
+  --color-warn: #9a5b00;
+  --color-warn-soft: #fff1dc;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Young Serif", ui-serif, Georgia, serif;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(27 27 47 / 0.04), 0 4px 16px rgb(27 27 47 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(27 27 47 / 0.06), 0 12px 32px rgb(27 27 47 / 0.1);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Young Serif ships one weight; never let the browser fake a bold version of it. */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: -0.005em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
+import { Inbox, LayoutGrid, Package, Send, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -8,13 +9,14 @@ import { AdminPanel } from "./AdminPanel";
 import { BrowseTools } from "./BrowseTools";
 import { LoanList } from "./LoanList";
 import { MyListings } from "./MyListings";
+import { Loading } from "./ui";
 
 const TABS = [
-  { id: "browse", label: "All tools" },
-  { id: "listings", label: "My listings" },
-  { id: "requests", label: "My requests" },
-  { id: "incoming", label: "Incoming requests" },
-  { id: "admin", label: "Admin" },
+  { id: "browse", label: "All tools", icon: LayoutGrid },
+  { id: "listings", label: "My listings", icon: Package },
+  { id: "requests", label: "My requests", icon: Send },
+  { id: "incoming", label: "Incoming requests", icon: Inbox },
+  { id: "admin", label: "Admin", icon: ShieldCheck },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -28,28 +30,26 @@ export default function Dashboard() {
 
   return (
     <>
-      <nav
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-stone-200"
-        aria-label="Sections"
-      >
+      <nav className="mb-8 flex gap-2 overflow-x-auto pb-1" aria-label="Sections">
         {tabs.map((t) => (
           <Link
             key={t.id}
             href={`/dashboard?tab=${t.id}`}
             aria-current={tab === t.id ? "page" : undefined}
-            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
               tab === t.id
-                ? "border-stone-900"
-                : "border-transparent text-stone-500 hover:text-stone-800"
+                ? "bg-ink text-white"
+                : "border border-line bg-surface text-muted hover:text-ink"
             }`}
           >
+            <t.icon className="h-4 w-4" aria-hidden />
             {t.label}
           </Link>
         ))}
       </nav>
 
       {!me ? (
-        <p className="text-stone-500">Loading…</p>
+        <Loading />
       ) : (
         <>
           {tab === "browse" && <BrowseTools isAdmin={isAdmin} />}

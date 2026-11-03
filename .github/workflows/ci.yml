@@ -26,7 +26,7 @@ jobs:
         run: npm run lint
 
       - name: Format
-        run: npx prettier --check app convex proxy.ts scripts
+        run: npx prettier --check app convex e2e proxy.ts scripts
 
       - name: Type-check
         run: npx tsc --noEmit

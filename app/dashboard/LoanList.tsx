@@ -23,7 +23,7 @@ export type Loan = FunctionReturnType<typeof api.loans.all>[number];
 export function LoanList({ view }: { view: "borrower" | "owner" }) {
   const loans = useQuery(view === "borrower" ? api.loans.myRequests : api.loans.incoming);
 
-  if (loans === undefined) return <p className="text-stone-500">Loading…</p>;
+  if (loans === undefined) return <p className="text-muted">Loading…</p>;
   if (loans.length === 0) {
     return (
       <Empty>
@@ -59,14 +59,14 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
         : `${loan.borrowerName} borrowing from ${loan.ownerName}`;
 
   return (
-    <li className="rounded-xl border border-stone-200 bg-white p-4">
+    <li className="rounded-card border border-line bg-surface shadow-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link href={`/dashboard/tools/${loan.toolId}`} className="font-medium hover:underline">
             {loan.toolName}
           </Link>{" "}
-          <span className="text-sm text-stone-500">{who}</span>
-          <p className="text-xs text-stone-500">
+          <span className="text-sm text-muted">{who}</span>
+          <p className="text-xs text-muted">
             {formatDate(loan.startDate)} → {formatDate(loan.endDate)}
           </p>
         </div>
@@ -77,23 +77,21 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
       </div>
 
       {loan.note && (
-        <p className="mt-2 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-700">
-          “{loan.note}”
-        </p>
+        <p className="mt-2 rounded-lg bg-paper px-3 py-2 text-sm text-ink">“{loan.note}”</p>
       )}
 
       {loan.pickup && !editingPickup && (
-        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
-          <p className="text-xs font-medium text-emerald-800">
+        <div className="mt-2 rounded-lg border border-ok/20 bg-ok-soft px-3 py-2 text-sm">
+          <p className="text-xs font-medium text-ok">
             {loan.pickup.kind === "home" ? "🏠 Pickup at home" : "☕ Meet-up spot"}
             {view === "owner" && " · visible only to the borrower while the loan is active"}
           </p>
-          <p className="text-stone-700">{loan.pickup.details}</p>
+          <p className="text-ink">{loan.pickup.details}</p>
           {view === "owner" && loan.status === "approved" && (
             <button
               type="button"
               onClick={() => setEditingPickup(true)}
-              className="mt-1 text-xs text-emerald-800 underline"
+              className="mt-1 text-xs text-ok underline"
             >
               Change
             </button>
@@ -101,7 +99,7 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
         </div>
       )}
       {view === "borrower" && loan.status === "pending" && (
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-muted">
           Pickup details will appear here once {loan.ownerName} approves.
         </p>
       )}
@@ -125,7 +123,7 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
       )}
 
       {loan.lastAutomation && (
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-muted">
           {loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"}{" "}
           {loan.lastAutomation.status === "sent" ? "sent" : "failed"}{" "}
           {timeAgo(loan.lastAutomation.at)}
@@ -169,15 +167,15 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
 
       {loan.canRate && <RateForm loan={loan} asOwner={view === "owner"} />}
       {loan.myRating && (
-        <p className="mt-2 text-xs text-stone-500">You rated this loan {loan.myRating}★</p>
+        <p className="mt-2 text-xs text-muted">You rated this loan {loan.myRating}★</p>
       )}
 
-      <details className="mt-3 text-xs text-stone-500">
+      <details className="mt-3 text-xs text-muted">
         <summary className="cursor-pointer select-none">History</summary>
-        <ol className="mt-2 space-y-1 border-l border-stone-200 pl-3">
+        <ol className="mt-2 space-y-1 border-l border-line pl-3">
           {loan.timeline.map((e, i) => (
             <li key={i}>
-              <span className="text-stone-400">{timeAgo(e.at)}</span> · {describe(e)}
+              <span className="text-muted">{timeAgo(e.at)}</span> · {describe(e)}
             </li>
           ))}
         </ol>
@@ -206,7 +204,7 @@ function PickupForm({
 
   return (
     <form
-      className="mt-3 space-y-2 rounded-lg border border-stone-200 p-3"
+      className="mt-3 space-y-2 rounded-lg border border-line p-3"
       onSubmit={(e) => {
         e.preventDefault();
         action.run(() => onSubmit({ kind, details }));
@@ -236,7 +234,7 @@ function PickupForm({
         onChange={(e) => setDetails(e.target.value)}
         className={inputClass}
       />
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-muted">
         Only this borrower sees this, only while the loan is active. It&apos;s deleted when the tool
         comes back.
       </p>
@@ -276,7 +274,7 @@ function RateForm({ loan, asOwner }: { loan: Loan; asOwner: boolean }) {
 
   return (
     <form
-      className="mt-3 space-y-2 rounded-lg bg-amber-50 p-3"
+      className="mt-3 space-y-2 rounded-lg bg-accent-soft p-3"
       onSubmit={(e) => {
         e.preventDefault();
         action.run(() => rate({ loanId: loan._id, stars, comment }));

@@ -12,7 +12,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <ClerkProvider>
+        <ClerkProvider
+          appearance={{
+            variables: {
+              colorPrimary: "#3a36a8",
+              colorForeground: "#1b1a3a",
+              colorBackground: "#ffffff",
+              fontFamily:
+                '"Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif',
+              borderRadius: "0.75rem",
+            },
+          }}
+        >
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </ClerkProvider>
       </body>

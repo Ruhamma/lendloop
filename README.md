@@ -97,8 +97,11 @@ npx convex run seed:demo                                    # optional demo data
 ### Tests
 
 ```bash
-npm test     # 26 tests: Convex functions (roles, loans, pickup privacy, ratings, audit log,
-             # rate limits, photo validation, idempotency, HTTP auth) and HMAC signing
+npm test          # 26 tests: Convex functions (roles, loans, pickup privacy, ratings, audit log,
+                  # rate limits, photo validation, idempotency, HTTP auth) and HMAC signing
+npm run test:e2e  # 6 Playwright smoke tests against the running stack (uses installed Chrome):
+                  # public page + live Convex data, no owner details in public, Clerk sign-in,
+                  # signed-out redirect, security headers, n8n endpoints reject unsigned calls
 ```
 
 `scripts/sign-test.mjs` sends a signed, forged, or stale event straight to the n8n webhook:
@@ -108,6 +111,17 @@ node --env-file=.env.n8n scripts/sign-test.mjs good   # 200
 node --env-file=.env.n8n scripts/sign-test.mjs bad    # 401
 node --env-file=.env.n8n scripts/sign-test.mjs stale  # 401
 ```
+
+---
+
+## Design
+
+A "library card" identity: old checkout cards stamped in indigo ink, with a red string on the tag.
+
+- **Logo:** a lending hang tag whose punch hole is a house. One filled shape, so it stays legible as a 16 px favicon.
+- **Colors:** cool paper `#F5F6FA`, ink `#1B1A3A`, stamp indigo `#3A36A8` (8.6:1 on paper), string red `#E2462F` used only for icons and badges (3.8:1, so never small text). All text pairs pass WCAG AA.
+- **Type:** Young Serif for headings (local, sign-over-the-counter feel) and Atkinson Hyperlegible Next for body, designed by the Braille Institute for low-vision readers. Both self-hosted, so no request goes to a font CDN and the CSP stays `'self'`.
+- **Accessibility:** visible focus rings, native `<dialog>` for confirmations (focus trap, Escape), labelled icon buttons, star ratings as a radio group, reduced-motion respected.
 
 ---
 
@@ -271,7 +285,7 @@ Roles are enforced in Convex functions. The UI only hides buttons a user can't u
 - **Scale:** paginate tool and loan lists, and denormalize current availability onto `tools` so lists don't scan loans.
 - **Timezones:** store a timezone per user and compute "overdue" in the borrower's local day.
 - **Observability:** Sentry on the Next.js app, Convex log streaming to Datadog, alerts on the error workflow, and an uptime check on the n8n webhook.
-- **Abuse limits:** rate limits on request creation, plus more E2E coverage (Playwright) of the full request → approve → return flow.
+- **Full end-to-end coverage:** the Playwright suite is a smoke test. Next I'd add Clerk testing tokens and two test users to drive request → approve → pickup → return → rate in a real browser, and run it in CI against a preview deployment.
 
 ---
 

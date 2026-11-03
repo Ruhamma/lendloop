@@ -50,7 +50,7 @@ export function MyListings() {
         <h2 className="mb-3 font-medium">Your tools</h2>
         <ErrorText error={action.error} />
         {tools === undefined ? (
-          <p className="text-stone-500">Loading…</p>
+          <p className="text-muted">Loading…</p>
         ) : tools.length === 0 ? (
           <Empty>You haven&apos;t listed anything yet.</Empty>
         ) : (
@@ -58,13 +58,13 @@ export function MyListings() {
             {tools.map((tool) => (
               <li
                 key={tool._id}
-                className="flex gap-3 rounded-xl border border-stone-200 bg-white p-3"
+                className="flex gap-3 rounded-card border border-line bg-surface shadow-card p-3"
               >
                 {tool.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Convex storage URLs are signed per request
                   <img src={tool.photoUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
                 ) : (
-                  <div className="h-16 w-16 rounded-lg bg-stone-100" />
+                  <div className="h-16 w-16 rounded-lg bg-paper" />
                 )}
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-2">
@@ -78,7 +78,7 @@ export function MyListings() {
                       {tool.availability.status === "available" ? "Available" : "On loan"}
                     </Badge>
                   </div>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-muted">
                     {CATEGORY_LABELS[tool.category]} · {tool.condition}
                   </p>
                   <div className="mt-2 flex gap-2">
@@ -138,7 +138,7 @@ function ToolForm({ editing, onDone }: { editing: MyTool | null; onDone: () => v
 
   return (
     <form
-      className="space-y-3 rounded-xl border border-stone-200 bg-white p-4"
+      className="space-y-3 rounded-card border border-line bg-surface shadow-card p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         const ok = await action.run(async () => {
@@ -217,7 +217,7 @@ function ToolForm({ editing, onDone }: { editing: MyTool | null; onDone: () => v
           onChange={(e) => set("neighborhood", e.target.value)}
           className={inputClass}
         />
-        <span className="text-xs text-stone-500">
+        <span className="text-xs text-muted">
           Just the area, never your address. You share pickup details only when you approve someone.
         </span>
       </label>

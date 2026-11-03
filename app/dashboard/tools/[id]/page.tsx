@@ -20,10 +20,10 @@ export default function ToolPage() {
   const action = useAction();
   const today = new Date().toISOString().slice(0, 10);
 
-  if (tool === undefined) return <p className="text-stone-500">Loading…</p>;
+  if (tool === undefined) return <p className="text-muted">Loading…</p>;
   if (tool === null) {
     return (
-      <p className="text-stone-500">
+      <p className="text-muted">
         This tool is no longer listed.{" "}
         <Link href="/dashboard" className="underline">
           Back to tools
@@ -39,7 +39,7 @@ export default function ToolPage() {
 
   return (
     <article>
-      <Link href="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
+      <Link href="/dashboard" className="text-sm text-muted hover:text-ink">
         ← All tools
       </Link>
 
@@ -53,7 +53,7 @@ export default function ToolPage() {
               className="aspect-[4/3] w-full rounded-xl object-cover"
             />
           ) : (
-            <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-stone-100 text-stone-400">
+            <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-paper text-muted">
               No photo
             </div>
           )}
@@ -68,19 +68,19 @@ export default function ToolPage() {
                 : `Back ${formatDate(tool.availability.until!)}`}
             </Badge>
           </div>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="mt-1 text-sm text-muted">
             {tool.neighborhood && <>📍 {tool.neighborhood} · </>}
             {CATEGORY_LABELS[tool.category]} · {tool.condition} condition
           </p>
-          <p className="mt-4 text-stone-700">{tool.description}</p>
+          <p className="mt-4 text-ink">{tool.description}</p>
 
-          <div className="mt-4 rounded-lg bg-stone-50 p-3 text-sm">
+          <div className="mt-4 rounded-lg bg-paper p-3 text-sm">
             {tool.isMine ? (
               "This is your tool."
             ) : (
               <>
                 Lent by <span className="font-medium">{tool.ownerName}</span>
-                {tool.ownerTrusted && <span className="text-emerald-700"> ★ Trusted Lender</span>}
+                {tool.ownerTrusted && <span className="text-ok"> ★ Trusted Lender</span>}
                 {tool.ownerRating && (
                   <div>
                     <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
@@ -93,7 +93,7 @@ export default function ToolPage() {
           {!tool.isMine && (
             <div className="mt-6">
               {sent ? (
-                <p className="text-emerald-700">
+                <p className="text-ok">
                   Request sent! Track it under{" "}
                   <Link href="/dashboard?tab=requests" className="underline">
                     My requests
@@ -101,7 +101,7 @@ export default function ToolPage() {
                   .
                 </p>
               ) : tool.hasPendingRequest ? (
-                <p className="text-stone-500">You already have a pending request for this tool.</p>
+                <p className="text-muted">You already have a pending request for this tool.</p>
               ) : (
                 <form
                   className="space-y-3"
@@ -114,11 +114,11 @@ export default function ToolPage() {
                   }}
                 >
                   <h2 className="font-medium">Request to borrow</h2>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-muted">
                     {tool.ownerName} shares exactly where to pick it up once they approve.
                   </p>
                   <div className="flex gap-2">
-                    <label className="flex-1 text-xs text-stone-600">
+                    <label className="flex-1 text-xs text-muted">
                       From
                       <input
                         type="date"
@@ -129,7 +129,7 @@ export default function ToolPage() {
                         className={inputClass}
                       />
                     </label>
-                    <label className="flex-1 text-xs text-stone-600">
+                    <label className="flex-1 text-xs text-muted">
                       To
                       <input
                         type="date"
@@ -141,7 +141,7 @@ export default function ToolPage() {
                       />
                     </label>
                   </div>
-                  <label className="block text-xs text-stone-600">
+                  <label className="block text-xs text-muted">
                     Note to {tool.ownerName} (optional)
                     <textarea
                       rows={2}
@@ -153,9 +153,7 @@ export default function ToolPage() {
                     />
                   </label>
                   {clash && (
-                    <p className="text-sm text-amber-700">
-                      Those dates overlap an existing booking.
-                    </p>
+                    <p className="text-sm text-warn">Those dates overlap an existing booking.</p>
                   )}
                   <Button type="submit" disabled={action.pending || !!clash}>
                     Send request
@@ -168,11 +166,11 @@ export default function ToolPage() {
         </div>
       </div>
 
-      <section className="mt-10 rounded-xl border border-stone-200 bg-white p-4">
+      <section className="mt-10 rounded-card border border-line bg-surface shadow-card p-4">
         <h2 className="mb-4 font-medium">Availability</h2>
         <BookingCalendar bookings={tool.bookings} selectedStart={startDate} selectedEnd={endDate} />
         {tool.isMine && tool.bookings.length > 0 && (
-          <ul className="mt-4 space-y-1 text-sm text-stone-600">
+          <ul className="mt-4 space-y-1 text-sm text-muted">
             {tool.bookings.map((b) => (
               <li key={b.startDate}>
                 {formatDate(b.startDate)} – {formatDate(b.endDate)}: {b.borrowerName}
