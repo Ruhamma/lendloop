@@ -31,7 +31,7 @@ export default function Dashboard() {
 
   return (
     <>
-      {tab !== "overview" && (
+      {tab !== "overview" && tab !== "admin" && (
         <div className="mb-6">
           <h1 className="text-3xl">{TITLES[tab].title}</h1>
           <p className="mt-1 text-ink-soft">{TITLES[tab].subtitle}</p>

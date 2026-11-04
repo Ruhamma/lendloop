@@ -3,9 +3,10 @@
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import { ChevronRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import {
   ActionLink,
   LoanStatusBadge,
@@ -46,14 +47,21 @@ type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 
 /**
  * Paginated loans for one side ("borrower", "owner") or all of them (admin), with a status
- * filter and a cards/table toggle. In the table, "Open" shows the full card (actions,
- * pickup, history) in a dialog.
+ * filter and a cards/table toggle. The table is an expandable "entity table": clicking a
+ * row opens the full loan card (actions, pickup, history) inline beneath it.
  */
 export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
   const [status, setStatus] = useState<StatusFilter>("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
   const [mode, setMode] = useViewMode(`loans-${view}`, view === "admin" ? "table" : "cards");
-  const [opened, setOpened] = useState<Loan | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const role = view === "admin" ? "all" : view;
 
   const [term, setTerm] = useState("");
@@ -65,32 +73,28 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
     pageSize,
   );
   const results = pager.rows;
-  // Keep the dialog in sync with live data (e.g. after approving inside it).
-  const openLoan = opened ? (results.find((l) => l._id === opened._id) ?? opened) : null;
 
   return (
     <section>
-      <div className="mb-3">
-        <SearchField
-          value={term}
-          onChange={setTerm}
-          placeholder={
-            view === "admin"
-              ? "Search by tool, borrower or owner…"
-              : view === "owner"
-                ? "Search by tool or borrower…"
-                : "Search by tool or owner…"
-          }
-        />
-      </div>
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <FilterPills
           label="Filter by status"
           options={STATUS_FILTERS}
           value={status}
           onChange={setStatus}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <SearchField
+            value={term}
+            onChange={setTerm}
+            placeholder={
+              view === "admin"
+                ? "Search tool, borrower, owner…"
+                : view === "owner"
+                  ? "Search tool or borrower…"
+                  : "Search tool or owner…"
+            }
+          />
           <select
             aria-label="Sort"
             value={sort}
@@ -153,6 +157,9 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
               <tr>
+                <th className="w-10 px-2 py-3">
+                  <span className="sr-only">Expand</span>
+                </th>
                 <th className="px-4 py-3 font-medium">Tool</th>
                 <th className="px-4 py-3 font-medium">
                   {view === "borrower"
@@ -164,44 +171,73 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
                 <th className="px-4 py-3 font-medium">Dates</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Last automation</th>
-                <th className="px-4 py-3 font-medium">
-                  <span className="sr-only">Open</span>
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {results.map((loan) => (
-                <tr key={loan._id} className="hover:bg-paper/60">
-                  <td className="px-4 py-3 font-medium">
-                    <Link href={`/dashboard/tools/${loan.toolId}`} className="hover:text-brand">
-                      {loan.toolName}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">
-                    {view === "borrower"
-                      ? loan.ownerName
-                      : view === "owner"
-                        ? loan.borrowerName
-                        : `${loan.borrowerName} → ${loan.ownerName}`}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
-                    {formatDate(loan.startDate)} – {formatDate(loan.endDate)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted">
-                    {loan.lastAutomation
-                      ? `${loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"} ${loan.lastAutomation.status} · ${timeAgo(loan.lastAutomation.at)}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="ghost" onClick={() => setOpened(loan)}>
-                      Open
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {results.map((loan) => {
+                const isOpen = expanded.has(loan._id);
+                return (
+                  <Fragment key={loan._id}>
+                    <tr
+                      className={`cursor-pointer hover:bg-paper/60 ${isOpen ? "bg-paper/60" : ""}`}
+                      onClick={(e) => {
+                        // Clicks on links inside the row keep their own behavior.
+                        if (!(e.target as HTMLElement).closest("a")) toggle(loan._id);
+                      }}
+                    >
+                      <td className="px-2 py-3">
+                        <button
+                          type="button"
+                          aria-expanded={isOpen}
+                          aria-label={`${isOpen ? "Collapse" : "Expand"} ${loan.toolName}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle(loan._id);
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-white hover:text-ink"
+                        >
+                          <ChevronRight
+                            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/dashboard/tools/${loan.toolId}`} className="hover:text-brand">
+                          {loan.toolName}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-ink-soft">
+                        {view === "borrower"
+                          ? loan.ownerName
+                          : view === "owner"
+                            ? loan.borrowerName
+                            : `${loan.borrowerName} → ${loan.ownerName}`}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
+                        {formatDate(loan.startDate)} – {formatDate(loan.endDate)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted">
+                        {loan.lastAutomation
+                          ? `${loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"} ${loan.lastAutomation.status} · ${timeAgo(loan.lastAutomation.at)}`
+                          : "—"}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="bg-paper/40">
+                        <td colSpan={6} className="px-4 pb-4 pt-1">
+                          {/* The full loan card: actions, pickup, rating and history. */}
+                          <ul>
+                            <LoanRow loan={loan} view={view} />
+                          </ul>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -218,52 +254,7 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
         pageSize={pageSize}
         onPageSize={setPageSize}
       />
-
-      <LoanDialog loan={openLoan} view={view} onClose={() => setOpened(null)} />
     </section>
-  );
-}
-
-/** Full loan card (actions, pickup, history) in a native dialog, opened from the table. */
-function LoanDialog({
-  loan,
-  view,
-  onClose,
-}: {
-  loan: Loan | null;
-  view: "borrower" | "owner" | "admin";
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (loan && !d.open) d.showModal();
-    if (!loan && d.open) d.close();
-  }, [loan]);
-  return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      className="m-auto w-[min(36rem,calc(100%-2rem))] rounded-card bg-transparent p-0 backdrop:bg-ink/40"
-    >
-      {loan && (
-        <div className="space-y-2">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => ref.current?.close()}
-              className="rounded-full bg-white px-3 py-1 text-sm font-medium shadow-card"
-            >
-              Close
-            </button>
-          </div>
-          <ul>
-            <LoanRow loan={loan} view={view} />
-          </ul>
-        </div>
-      )}
-    </dialog>
   );
 }
 

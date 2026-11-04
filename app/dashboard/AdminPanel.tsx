@@ -25,31 +25,31 @@ const KIND_STYLES = {
 export function AdminPanel() {
   return (
     <div className="space-y-10">
-      {/* Jump between sections quickly; stays visible while scrolling long lists. */}
-      <nav
-        aria-label="Admin sections"
-        className="sticky top-[4.25rem] z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl bg-paper/90 p-1 backdrop-blur"
-      >
-        <span className="self-center px-2 text-xs font-semibold uppercase tracking-wide text-muted">
-          Jump to
-        </span>
-        {SECTIONS.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white px-3 py-2 text-sm font-medium ring-1 ring-black/5 hover:text-brand"
-          >
-            <s.icon className="h-4 w-4" aria-hidden /> {s.label}
-          </a>
-        ))}
-      </nav>
+      {/* Title on the left, section jumps on the right. The row stays pinned under the top
+          bar so you can jump between long sections from anywhere on the page. */}
+      <div className="sticky top-[3.6rem] z-20 -mx-4 flex flex-col gap-3 bg-paper/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-3xl">Admin</h1>
+          <p className="mt-1 text-ink-soft">Neighbors, every loan, and the audit log.</p>
+        </div>
+        <nav aria-label="Admin sections" className="flex gap-2 overflow-x-auto">
+          {SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white px-3 py-2 text-sm font-medium ring-1 ring-black/5 hover:text-brand"
+            >
+              <s.icon className="h-4 w-4" aria-hidden /> {s.label}
+            </a>
+          ))}
+        </nav>
+      </div>
 
-      <section id="neighbors" className="scroll-mt-32">
-        <SectionTitle icon={Users} title="Neighbors" />
+      <section id="neighbors" className="scroll-mt-40">
         <Neighbors />
       </section>
 
-      <section id="audit" className="scroll-mt-32">
+      <section id="audit" className="scroll-mt-40">
         <SectionTitle
           icon={ScrollText}
           title="Audit log"
@@ -58,7 +58,7 @@ export function AdminPanel() {
         <ActivityLog />
       </section>
 
-      <section id="loans" className="scroll-mt-32">
+      <section id="loans" className="scroll-mt-40">
         <SectionTitle
           icon={Repeat}
           title="All loans"
@@ -70,21 +70,27 @@ export function AdminPanel() {
   );
 }
 
+/** Section heading with an optional control (e.g. a search box) on the right. */
 function SectionTitle({
   icon: Icon,
   title,
   subtitle,
+  right,
 }: {
   icon: typeof Users;
   title: string;
   subtitle?: string;
+  right?: React.ReactNode;
 }) {
   return (
-    <div className="mb-4">
-      <h2 className="flex items-center gap-2 text-xl font-bold">
-        <Icon className="h-5 w-5 text-brand" aria-hidden /> {title}
-      </h2>
-      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h2 className="flex items-center gap-2 text-xl font-bold">
+          <Icon className="h-5 w-5 text-brand" aria-hidden /> {title}
+        </h2>
+        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+      </div>
+      {right}
     </div>
   );
 }
@@ -103,9 +109,12 @@ function Neighbors() {
 
   return (
     <div>
-      <div className="mb-3">
-        <SearchField value={term} onChange={setTerm} placeholder="Search neighbors by name…" />
-      </div>
+      <SectionTitle
+        icon={Users}
+        title="Neighbors"
+        subtitle="Everyone who has signed in, with their role and rating."
+        right={<SearchField value={term} onChange={setTerm} placeholder="Search by name…" />}
+      />
       {pager.loading ? (
         <Loading />
       ) : pager.rows.length === 0 ? (
