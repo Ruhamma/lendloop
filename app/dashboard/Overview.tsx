@@ -5,6 +5,7 @@ import { ArrowUpRight, Inbox, Package, Repeat, Send } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
+import { EntityTable } from "./EntityTable";
 import { Empty, LoanStatusBadge, Loading, Stars, formatDate } from "./ui";
 
 function greeting() {
@@ -109,31 +110,38 @@ export function Overview({ name }: { name: string }) {
               <Empty>No one has asked to borrow your tools yet.</Empty>
             </div>
           ) : (
-            <div className="overflow-x-auto p-2">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-3 py-3 font-medium">Tool</th>
-                    <th className="px-3 py-3 font-medium">Borrower</th>
-                    <th className="px-3 py-3 font-medium">Dates</th>
-                    <th className="px-3 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {recent.map((loan) => (
-                    <tr key={loan._id}>
-                      <td className="px-3 py-3 font-medium">{loan.toolName}</td>
-                      <td className="px-3 py-3 text-ink-soft">{loan.borrowerName}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-ink-soft">
-                        {formatDate(loan.startDate)} – {formatDate(loan.endDate)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="p-2">
+              <EntityTable
+                rows={recent}
+                rowKey={(l) => l._id}
+                caption="Requests for your tools"
+                minWidth={560}
+                columns={[
+                  {
+                    key: "tool",
+                    header: "Tool",
+                    className: "font-medium",
+                    cell: (l) => l.toolName,
+                  },
+                  {
+                    key: "borrower",
+                    header: "Borrower",
+                    className: "text-ink-soft",
+                    cell: (l) => l.borrowerName,
+                  },
+                  {
+                    key: "dates",
+                    header: "Dates",
+                    className: "whitespace-nowrap text-ink-soft",
+                    cell: (l) => `${formatDate(l.startDate)} – ${formatDate(l.endDate)}`,
+                  },
+                  {
+                    key: "status",
+                    header: "Status",
+                    cell: (l) => <LoanStatusBadge status={l.status} overdue={l.overdue} />,
+                  },
+                ]}
+              />
             </div>
           )}
         </section>

@@ -3,10 +3,9 @@
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
-import { ChevronRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import {
   ActionLink,
   LoanStatusBadge,
@@ -21,6 +20,7 @@ import {
   timeAgo,
   useAction,
 } from "./ui";
+import { EntityTable } from "./EntityTable";
 import {
   FilterPills,
   Pager,
@@ -54,14 +54,6 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
   const [status, setStatus] = useState<StatusFilter>("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
   const [mode, setMode] = useViewMode(`loans-${view}`, view === "admin" ? "table" : "cards");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   const role = view === "admin" ? "all" : view;
 
   const [term, setTerm] = useState("");
@@ -153,94 +145,63 @@ export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
           ))}
         </ul>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="w-10 px-2 py-3">
-                  <span className="sr-only">Expand</span>
-                </th>
-                <th className="px-4 py-3 font-medium">Tool</th>
-                <th className="px-4 py-3 font-medium">
-                  {view === "borrower"
-                    ? "Owner"
-                    : view === "owner"
-                      ? "Borrower"
-                      : "Borrower → owner"}
-                </th>
-                <th className="px-4 py-3 font-medium">Dates</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Last automation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {results.map((loan) => {
-                const isOpen = expanded.has(loan._id);
-                return (
-                  <Fragment key={loan._id}>
-                    <tr
-                      className={`cursor-pointer hover:bg-paper/60 ${isOpen ? "bg-paper/60" : ""}`}
-                      onClick={(e) => {
-                        // Clicks on links inside the row keep their own behavior.
-                        if (!(e.target as HTMLElement).closest("a")) toggle(loan._id);
-                      }}
-                    >
-                      <td className="px-2 py-3">
-                        <button
-                          type="button"
-                          aria-expanded={isOpen}
-                          aria-label={`${isOpen ? "Collapse" : "Expand"} ${loan.toolName}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggle(loan._id);
-                          }}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-white hover:text-ink"
-                        >
-                          <ChevronRight
-                            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-                          />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 font-medium">
-                        <Link href={`/dashboard/tools/${loan.toolId}`} className="hover:text-brand">
-                          {loan.toolName}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-ink-soft">
-                        {view === "borrower"
-                          ? loan.ownerName
-                          : view === "owner"
-                            ? loan.borrowerName
-                            : `${loan.borrowerName} → ${loan.ownerName}`}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
-                        {formatDate(loan.startDate)} – {formatDate(loan.endDate)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted">
-                        {loan.lastAutomation
-                          ? `${loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"} ${loan.lastAutomation.status} · ${timeAgo(loan.lastAutomation.at)}`
-                          : "—"}
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="bg-paper/40">
-                        <td colSpan={6} className="px-4 pb-4 pt-1">
-                          {/* The full loan card: actions, pickup, rating and history. */}
-                          <ul>
-                            <LoanRow loan={loan} view={view} />
-                          </ul>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <EntityTable
+          rows={results}
+          rowKey={(l) => l._id}
+          rowLabel={(l) => l.toolName}
+          caption="Loans"
+          minWidth={760}
+          columns={[
+            {
+              key: "tool",
+              header: "Tool",
+              className: "font-medium",
+              cell: (loan) => (
+                <Link href={`/dashboard/tools/${loan.toolId}`} className="hover:text-brand">
+                  {loan.toolName}
+                </Link>
+              ),
+            },
+            {
+              key: "who",
+              header:
+                view === "borrower" ? "Owner" : view === "owner" ? "Borrower" : "Borrower → owner",
+              className: "text-ink-soft",
+              cell: (loan) =>
+                view === "borrower"
+                  ? loan.ownerName
+                  : view === "owner"
+                    ? loan.borrowerName
+                    : `${loan.borrowerName} → ${loan.ownerName}`,
+            },
+            {
+              key: "dates",
+              header: "Dates",
+              className: "whitespace-nowrap text-ink-soft",
+              cell: (loan) => `${formatDate(loan.startDate)} – ${formatDate(loan.endDate)}`,
+            },
+            {
+              key: "status",
+              header: "Status",
+              cell: (loan) => <LoanStatusBadge status={loan.status} overdue={loan.overdue} />,
+            },
+            {
+              key: "automation",
+              header: "Last automation",
+              className: "text-xs text-muted",
+              cell: (loan) =>
+                loan.lastAutomation
+                  ? `${loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"} ${loan.lastAutomation.status} · ${timeAgo(loan.lastAutomation.at)}`
+                  : "—",
+            },
+          ]}
+          renderExpanded={(loan) => (
+            // The full loan card: actions, pickup, overdue banner, rating and history.
+            <ul>
+              <LoanRow loan={loan} view={view} />
+            </ul>
+          )}
+        />
       )}
 
       <Pager

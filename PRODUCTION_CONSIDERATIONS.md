@@ -50,6 +50,7 @@ LendLoop is a take-home: it runs locally with Convex, Clerk dev keys and a self-
 - **AWS Secrets Manager** (or HashiCorp Vault) as the source of truth, injected into n8n at runtime by the container platform (ECS task definitions reference the secret ARN), and synced to Convex env vars by CI with least-privilege credentials.
 - **Rotation without downtime**: verify against both the current and previous HMAC secret during a rotation window, sign with the new one, then retire the old.
 - **Least privilege everywhere**: separate IAM roles for CI, n8n and humans; no long-lived access keys.
+- **n8n Code nodes and environment variables:** the take-home lets Code nodes read env vars (`N8N_BLOCK_ENV_ACCESS_IN_NODE=false`) so they can verify and sign HMACs, which the brief allows ("environment variables and n8n credentials"). The catch is that *any* workflow could then read *every* variable. In production I'd keep only the two HMAC secrets in n8n's environment (nothing else sensitive), or move signing into a small custom n8n node that reads an n8n credential, and turn env access back off.
 
 ## 6. Hosting n8n on AWS
 

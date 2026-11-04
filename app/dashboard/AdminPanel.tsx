@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { FilterPills, Pager, SearchField, useDebounced, usePagedQuery } from "./collection";
+import { EntityTable } from "./EntityTable";
 import { LoanList } from "./LoanList";
 import { Button, Empty, Loading, Stars, TextPromptDialog, timeAgo } from "./ui";
 
@@ -120,56 +121,56 @@ function Neighbors() {
       ) : pager.rows.length === 0 ? (
         <Empty pip={false}>No neighbors match that search.</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Email</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Rating</th>
-                <th className="px-4 py-3 font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {pager.rows.map((u) => (
-                <tr key={u._id} className="hover:bg-paper/60">
-                  <td className="px-4 py-3 font-medium">
-                    {u.name}
-                    {u.trustedLender && (
-                      <BadgeCheck
-                        className="ml-1 inline h-4 w-4 text-brand"
-                        aria-label="Trusted Lender"
-                      />
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">{u.email}</td>
-                  <td className="px-4 py-3 capitalize text-ink-soft">{u.role}</td>
-                  <td className="px-4 py-3">
-                    {u.rating ? (
-                      <Stars value={u.rating.average} count={u.rating.count} />
-                    ) : (
-                      <span className="text-xs text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant={u.trustedLender ? "ghost" : "primary"}
-                      onClick={() =>
-                        setChanging({ id: u._id, name: u.name, trusted: !u.trustedLender })
-                      }
-                    >
-                      {u.trustedLender ? "Remove Trusted" : "Mark Trusted"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EntityTable
+          rows={pager.rows}
+          rowKey={(u) => u._id}
+          caption="Neighbors"
+          minWidth={640}
+          columns={[
+            {
+              key: "name",
+              header: "Name",
+              className: "font-medium",
+              cell: (u) => (
+                <>
+                  {u.name}
+                  {u.trustedLender && (
+                    <BadgeCheck
+                      className="ml-1 inline h-4 w-4 text-brand"
+                      aria-label="Trusted Lender"
+                    />
+                  )}
+                </>
+              ),
+            },
+            { key: "email", header: "Email", className: "text-ink-soft", cell: (u) => u.email },
+            {
+              key: "role",
+              header: "Role",
+              className: "capitalize text-ink-soft",
+              cell: (u) => u.role,
+            },
+            {
+              key: "rating",
+              header: "Rating",
+              cell: (u) =>
+                u.rating ? (
+                  <Stars value={u.rating.average} count={u.rating.count} />
+                ) : (
+                  <span className="text-xs text-muted">—</span>
+                ),
+            },
+          ]}
+          renderActions={(u) => (
+            <Button
+              size="sm"
+              variant={u.trustedLender ? "ghost" : "primary"}
+              onClick={() => setChanging({ id: u._id, name: u.name, trusted: !u.trustedLender })}
+            >
+              {u.trustedLender ? "Remove Trusted" : "Mark Trusted"}
+            </Button>
+          )}
+        />
       )}
       <Pager
         page={pager.page}
@@ -231,53 +232,64 @@ function ActivityLog() {
       ) : feed.entries.length === 0 ? (
         <Empty pip={false}>Nothing logged yet.</Empty>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">When</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Who</th>
-                <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">On</th>
-                <th className="px-4 py-3 font-medium">Detail</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {feed.entries.map((e) => (
-                <tr key={e.id}>
-                  <td
-                    className="whitespace-nowrap px-4 py-2.5 text-xs text-muted"
-                    title={new Date(e.at).toLocaleString()}
-                  >
-                    {timeAgo(e.at)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${KIND_STYLES[e.kind]}`}
-                    >
-                      {e.kind}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 font-medium">{e.actor}</td>
-                  <td className="px-4 py-2.5 capitalize">
-                    {e.action}
-                    {!e.ok && (
-                      <span className="ml-2 text-xs font-semibold text-danger">failed</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-soft">{e.target}</td>
-                  <td
-                    className="max-w-xs truncate px-4 py-2.5 text-xs text-muted"
-                    title={e.detail ?? ""}
-                  >
-                    {e.detail ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EntityTable
+          rows={feed.entries}
+          rowKey={(e) => e.id}
+          rowLabel={(e) => `${e.action} on ${e.target}`}
+          caption="Audit log"
+          columns={[
+            {
+              key: "when",
+              header: "When",
+              className: "whitespace-nowrap text-xs text-muted",
+              cell: (e) => <span title={new Date(e.at).toLocaleString()}>{timeAgo(e.at)}</span>,
+            },
+            {
+              key: "type",
+              header: "Type",
+              cell: (e) => (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${KIND_STYLES[e.kind]}`}
+                >
+                  {e.kind}
+                </span>
+              ),
+            },
+            { key: "who", header: "Who", className: "font-medium", cell: (e) => e.actor },
+            {
+              key: "action",
+              header: "Action",
+              className: "capitalize",
+              cell: (e) => (
+                <>
+                  {e.action}
+                  {!e.ok && <span className="ml-2 text-xs font-semibold text-danger">failed</span>}
+                </>
+              ),
+            },
+            { key: "on", header: "On", className: "text-ink-soft", cell: (e) => e.target },
+          ]}
+          renderExpanded={(e) => (
+            <dl className="grid gap-3 rounded-2xl bg-white p-4 text-sm ring-1 ring-black/5 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted">Exact time</dt>
+                <dd className="mt-1">{new Date(e.at).toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted">Result</dt>
+                <dd className={`mt-1 font-medium ${e.ok ? "text-ok" : "text-danger"}`}>
+                  {e.ok ? "Succeeded" : "Failed"}
+                </dd>
+              </div>
+              <div className="sm:col-span-3">
+                <dt className="text-xs uppercase tracking-wide text-muted">Detail</dt>
+                <dd className="mt-1 whitespace-pre-wrap break-words text-ink-soft">
+                  {e.detail ?? "No extra detail recorded."}
+                </dd>
+              </div>
+            </dl>
+          )}
+        />
       )}
       <Pager
         page={page + 1}

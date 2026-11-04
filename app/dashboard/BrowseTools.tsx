@@ -2,13 +2,14 @@
 
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { BadgeCheck, CalendarClock, ChevronRight, MapPin, Pencil, Trash2 } from "lucide-react";
+import { BadgeCheck, CalendarClock, MapPin, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/convex/lib/constants";
 import { CATEGORY_DOORS, CATEGORY_ICONS } from "../components/categoryIcons";
+import { EntityTable, type Column } from "./EntityTable";
 import {
   FilterPills,
   Pager,
@@ -341,132 +342,90 @@ function ToolTable({
   tools: ToolRow[];
   renderActions: (tool: ToolRow) => React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (id: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const columns: Column<ToolRow>[] = [
+    {
+      key: "tool",
+      header: "Tool",
+      cell: (tool) => (
+        <Link
+          href={`/dashboard/tools/${tool._id}`}
+          className="flex items-center gap-3 font-medium hover:text-brand"
+        >
+          <ToolArt tool={tool} className="h-10 w-10 shrink-0 rounded-lg" iconClass="h-5 w-5" />
+          <span>
+            {tool.name}
+            {tool.neighborhood && (
+              <span className="block text-xs font-normal text-muted">{tool.neighborhood}</span>
+            )}
+          </span>
+        </Link>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      cell: (tool) => CATEGORY_LABELS[tool.category],
+      className: "text-ink-soft",
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      cell: (tool) => (tool.isMine ? "You" : tool.ownerName),
+      className: "text-ink-soft",
+    },
+    {
+      key: "availability",
+      header: "Availability",
+      cell: (tool) => (
+        <div className="flex flex-col items-start gap-1">
+          <AvailabilityBadge availability={tool.availability} />
+          <BookingNote availability={tool.availability} />
+        </div>
+      ),
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      cell: (tool) =>
+        tool.ownerRating ? (
+          <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
-          <tr>
-            <th className="w-10 px-2 py-3">
-              <span className="sr-only">Expand</span>
-            </th>
-            <th className="px-4 py-3 font-medium">Tool</th>
-            <th className="px-4 py-3 font-medium">Category</th>
-            <th className="px-4 py-3 font-medium">Owner</th>
-            <th className="px-4 py-3 font-medium">Availability</th>
-            <th className="px-4 py-3 font-medium">Rating</th>
-            <th className="px-4 py-3 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {tools.map((tool) => {
-            const isOpen = expanded.has(tool._id);
-            return (
-              <Fragment key={tool._id}>
-                <tr
-                  className={`cursor-pointer hover:bg-paper/60 ${isOpen ? "bg-paper/60" : ""}`}
-                  onClick={(e) => {
-                    // Links and buttons inside the row keep their own behavior.
-                    if (!(e.target as HTMLElement).closest("a,button")) toggle(tool._id);
-                  }}
-                >
-                  <td className="px-2 py-3">
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      aria-label={`${isOpen ? "Collapse" : "Expand"} ${tool.name}`}
-                      onClick={() => toggle(tool._id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-white hover:text-ink"
-                    >
-                      <ChevronRight
-                        className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/dashboard/tools/${tool._id}`}
-                      className="flex items-center gap-3 font-medium hover:text-brand"
-                    >
-                      <ToolArt
-                        tool={tool}
-                        className="h-10 w-10 shrink-0 rounded-lg"
-                        iconClass="h-5 w-5"
-                      />
-                      <span>
-                        {tool.name}
-                        {tool.neighborhood && (
-                          <span className="block text-xs font-normal text-muted">
-                            {tool.neighborhood}
-                          </span>
-                        )}
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">{CATEGORY_LABELS[tool.category]}</td>
-                  <td className="px-4 py-3 text-ink-soft">
-                    {tool.isMine ? "You" : tool.ownerName}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col items-start gap-1">
-                      <AvailabilityBadge availability={tool.availability} />
-                      <BookingNote availability={tool.availability} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {tool.ownerRating ? (
-                      <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
-                    ) : (
-                      <span className="text-xs text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">{renderActions(tool)}</td>
-                </tr>
-                {isOpen && (
-                  <tr className="bg-paper/40">
-                    <td colSpan={7} className="px-4 pb-4 pt-1">
-                      <div className="grid gap-4 rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:grid-cols-[200px_1fr]">
-                        <ToolArt
-                          tool={tool}
-                          className="aspect-[4/3] w-full rounded-xl"
-                          iconClass="h-12 w-12"
-                        />
-                        <div className="space-y-2 text-sm">
-                          <p className="text-ink-soft">{tool.description}</p>
-                          <p className="text-xs text-muted">
-                            <span className="capitalize">{tool.condition}</span> condition ·{" "}
-                            {CATEGORY_LABELS[tool.category]}
-                            {tool.neighborhood && ` · ${tool.neighborhood}`}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AvailabilityBadge availability={tool.availability} />
-                            <BookingNote availability={tool.availability} />
-                          </div>
-                          <Link
-                            href={`/dashboard/tools/${tool._id}`}
-                            className="inline-block pt-1 font-medium text-brand hover:underline"
-                          >
-                            {tool.isMine ? "Open tool page" : "View dates and request"} →
-                          </Link>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <EntityTable
+      rows={tools}
+      columns={columns}
+      rowKey={(t) => t._id}
+      rowLabel={(t) => t.name}
+      caption="Tools"
+      renderActions={renderActions}
+      renderExpanded={(tool) => (
+        <div className="grid gap-4 rounded-2xl bg-white p-4 ring-1 ring-black/5 sm:grid-cols-[200px_1fr]">
+          <ToolArt tool={tool} className="aspect-[4/3] w-full rounded-xl" iconClass="h-12 w-12" />
+          <div className="space-y-2 text-sm">
+            <p className="text-ink-soft">{tool.description}</p>
+            <p className="text-xs text-muted">
+              <span className="capitalize">{tool.condition}</span> condition ·{" "}
+              {CATEGORY_LABELS[tool.category]}
+              {tool.neighborhood && ` · ${tool.neighborhood}`}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <AvailabilityBadge availability={tool.availability} />
+              <BookingNote availability={tool.availability} />
+            </div>
+            <Link
+              href={`/dashboard/tools/${tool._id}`}
+              className="inline-block pt-1 font-medium text-brand hover:underline"
+            >
+              {tool.isMine ? "Open tool page" : "View dates and request"} →
+            </Link>
+          </div>
+        </div>
+      )}
+    />
   );
 }
