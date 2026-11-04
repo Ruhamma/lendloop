@@ -15,6 +15,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ClerkProvider
           signInUrl="/sign-in"
           signUpUrl="/sign-up"
+          afterSignOutUrl="/"
           appearance={{
             cssLayerName: "clerk",
             variables: {
