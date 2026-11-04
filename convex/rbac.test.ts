@@ -35,11 +35,16 @@ async function setup() {
 }
 
 describe("public page", () => {
-  test("anonymous visitors see name and category only", async () => {
+  test("anonymous visitors see name, category and booked dates only, never the owner", async () => {
     const { t } = await setup();
     const tools = await t.query(api.tools.publicList, {});
     expect(tools).toEqual([
-      { _id: expect.any(String), name: "Cordless drill", category: "power_tools" },
+      {
+        _id: expect.any(String),
+        name: "Cordless drill",
+        category: "power_tools",
+        nextBooking: null,
+      },
     ]);
   });
 

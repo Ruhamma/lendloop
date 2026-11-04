@@ -1,12 +1,14 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
 import { requireAdmin, requireViewer } from "./lib/auth";
 import { assertIsoDate, rangesOverlap, todayIso } from "./lib/dates";
 import { logLoanEvent } from "./lib/history";
 import { notify } from "./lib/notifications";
 import { rateLimit } from "./lib/rateLimit";
 import { cleanText, optionalText } from "./lib/text";
+import { collectionArgs, searchTerm } from "./lib/collection";
+import { loanStatus } from "./schema";
 
 const MAX_LOAN_DAYS = 30;
 const MAX_NOTE = 280;
@@ -144,6 +146,9 @@ export const request = mutation({
       endDate,
       status: "pending",
       note: optionalText(note, "Note", MAX_NOTE),
+      searchText: [tool.name, (await ctx.db.get(tool.ownerId))?.name, viewer.name]
+        .filter(Boolean)
+        .join(" "),
     });
     await logLoanEvent(ctx, loanId, viewer._id, "requested");
     await notify(ctx, loanId, "owner");
@@ -226,6 +231,65 @@ export const updatePickup = mutation({
   },
 });
 
+/**
+ * Paginated loans for one side of the relationship (collection query): the viewer as
+ * borrower, as owner, or every loan for admins. Optional status filter; "overdue" is
+ * approved loans past their end date.
+ */
+export const page = query({
+  args: {
+    ...collectionArgs,
+    role: v.union(v.literal("borrower"), v.literal("owner"), v.literal("all")),
+    status: v.optional(v.union(loanStatus, v.literal("overdue"))),
+  },
+  handler: async (ctx, args) => {
+    const viewer = await requireViewer(ctx);
+    if (args.role === "all") await requireAdmin(ctx);
+    const order = args.sort === "oldest" ? "asc" : "desc";
+    const wanted = args.status === "overdue" ? "approved" : args.status;
+
+    const base =
+      args.role === "borrower"
+        ? ctx.db.query("loans").withIndex("by_borrower", (q) => q.eq("borrowerId", viewer._id))
+        : args.role === "owner"
+          ? ctx.db.query("loans").withIndex("by_owner", (q) => q.eq("ownerId", viewer._id))
+          : ctx.db.query("loans");
+    const today = todayIso();
+    const search = searchTerm(args.search);
+    if (search) {
+      const hits = await ctx.db
+        .query("loans")
+        .withSearchIndex("search_text", (q) => {
+          let s = q.search("searchText", search);
+          if (args.role === "borrower") s = s.eq("borrowerId", viewer._id);
+          if (args.role === "owner") s = s.eq("ownerId", viewer._id);
+          if (wanted) s = s.eq("status", wanted);
+          return s;
+        })
+        .filter((q) => (args.status === "overdue" ? q.lt(q.field("endDate"), today) : true))
+        .paginate(args.paginationOpts);
+      return {
+        ...hits,
+        page: await Promise.all(hits.page.map((l) => present(ctx, l, viewer._id))),
+      };
+    }
+    const result = await base
+      .order(order)
+      .filter((q) =>
+        q.and(
+          wanted ? q.eq(q.field("status"), wanted) : true,
+          args.status === "overdue" ? q.lt(q.field("endDate"), today) : true,
+        ),
+      )
+      .paginate(args.paginationOpts);
+
+    return {
+      ...result,
+      page: await Promise.all(result.page.map((l) => present(ctx, l, viewer._id))),
+    };
+  },
+});
+
 export const myRequests = query({
   args: {},
   handler: async (ctx) => {
@@ -258,5 +322,29 @@ export const all = query({
     const admin = await requireAdmin(ctx);
     const loans = await ctx.db.query("loans").order("desc").take(200);
     return await Promise.all(loans.map((l) => present(ctx, l, admin._id)));
+  },
+});
+
+/**
+ * One-off: fill `searchText` on loans created before it existed.
+ *   npx convex run loans:backfillSearchText
+ */
+export const backfillSearchText = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let updated = 0;
+    for (const loan of await ctx.db.query("loans").collect()) {
+      if (loan.searchText) continue;
+      const [tool, owner, borrower] = await Promise.all([
+        ctx.db.get(loan.toolId),
+        ctx.db.get(loan.ownerId),
+        ctx.db.get(loan.borrowerId),
+      ]);
+      await ctx.db.patch(loan._id, {
+        searchText: [tool?.name, owner?.name, borrower?.name].filter(Boolean).join(" "),
+      });
+      updated++;
+    }
+    return { updated };
   },
 });

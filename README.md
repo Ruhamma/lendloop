@@ -28,7 +28,9 @@ Stack: Next.js 16 (App Router) · Clerk · Convex · n8n (self-hosted, Docker) �
 | **Two-way ratings** after a return | Trust between strangers; gives admins evidence for "Trusted Lender" |
 | **Admin audit log** with a required reason for removals | Moderation is accountable and reviewable |
 | **Rate limiting** per user | Stops spam requests and upload abuse |
-| **Search** across tool names and descriptions | Faster browsing |
+| **Collection queries**: server-side search, filters, sort and pagination on every list | Lists stay fast with thousands of tools and loans; one argument shape (`search · filters · sort · page`) for every list |
+| **Cards ↔ table views** with **⌘K / Ctrl+K** search | Cards for browsing, tables for scanning and acting fast (admins especially) |
+| **Admin general audit log** and jump-to sections | Every admin action, loan change and automation in one filterable, paginated table |
 | **Staged pickup disclosure** (neighborhood → pickup details only after approval) | The brief has no handover step, and any handover reveals where the owner lives. See below. |
 
 ---
@@ -97,9 +99,10 @@ npx convex run seed:demo                                    # optional demo data
 ### Tests
 
 ```bash
-npm test          # 26 tests: Convex functions (roles, loans, pickup privacy, ratings, audit log,
-                  # rate limits, photo validation, idempotency, HTTP auth) and HMAC signing
-npm run test:e2e  # 6 Playwright smoke tests against the running stack (uses installed Chrome):
+npm test          # 34 tests: Convex functions (roles, loans, pickup privacy, ratings, audit log,
+                  # rate limits, photo validation, idempotency, HTTP auth, search + pagination)
+                  # and HMAC signing
+npm run test:e2e  # 7 Playwright smoke tests against the running stack (uses installed Chrome):
                   # public page + live Convex data, no owner details in public, Clerk sign-in,
                   # signed-out redirect, security headers, n8n endpoints reject unsigned calls
 ```
@@ -166,6 +169,8 @@ All `.env*` files except the examples are git-ignored. No secret appears in code
 | `convex/lib/auth.ts` | `requireViewer`, `requireAdmin`, `isOwnerOrAdmin` |
 | `convex/tools.ts`, `convex/loans.ts`, `convex/users.ts`, `convex/ratings.ts` | App functions |
 | `convex/lib/rateLimit.ts`, `convex/lib/history.ts` | Rate limiting; timeline, audit and rating helpers |
+| `convex/lib/collection.ts`, `app/dashboard/collection.tsx` | Collection query args (server) and the paging/search/view hooks (client) |
+| `convex/activity.ts` | Admin general audit log (admin actions + loan events + automations) |
 | `convex/storage.ts`, `convex/crons.ts` | Daily cleanup of uploads no listing uses |
 | `convex/notify.ts` | Signed outbound webhook with retries |
 | `convex/http.ts`, `convex/automation.ts` | Endpoints n8n calls, idempotent write-back |

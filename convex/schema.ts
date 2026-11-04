@@ -23,7 +23,8 @@ export default defineSchema({
     trustedLender: v.boolean(),
   })
     .index("by_token", ["tokenIdentifier"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .searchIndex("search_name", { searchField: "name" }),
 
   tools: defineTable({
     ownerId: v.id("users"),
@@ -37,7 +38,9 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_category", ["category"])
-    .index("by_photo", ["photoId"]),
+    .index("by_photo", ["photoId"])
+    .index("by_name", ["name"])
+    .searchIndex("search_name", { searchField: "name", filterFields: ["category", "ownerId"] }),
 
   loans: defineTable({
     toolId: v.id("tools"),
@@ -50,6 +53,7 @@ export default defineSchema({
     returnedAt: v.optional(v.number()),
     // Optional message from the borrower to the owner ("Need it for the fence on Saturday").
     note: v.optional(v.string()),
+    searchText: v.optional(v.string()),
     // How to collect the tool. Written by the owner on approval, shown only to the approved
     // borrower while the loan is active, and deleted when the loan ends.
     pickup: v.optional(
@@ -62,7 +66,13 @@ export default defineSchema({
     .index("by_tool", ["toolId"])
     .index("by_owner", ["ownerId"])
     .index("by_borrower", ["borrowerId"])
-    .index("by_status_end", ["status", "endDate"]),
+    .index("by_status_end", ["status", "endDate"])
+    // Tool, owner and borrower names, so admins can search loans by any of them. Kept in
+    // sync on create (loans.request) and backfilled once by loans.backfillSearchText.
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["ownerId", "borrowerId", "status"],
+    }),
 
   // Audit trail of everything the n8n integration did. `key` is the idempotency key:
   // a retried write-back with the same key is a no-op instead of a duplicate row.

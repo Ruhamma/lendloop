@@ -1,8 +1,7 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
-import Link from "next/link";
+import { useMutation } from "convex/react";
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -14,9 +13,9 @@ import {
   type Condition,
 } from "@/convex/lib/constants";
 import { preparePhoto } from "./preparePhoto";
-import { AvailabilityBadge, Button, Empty, ErrorText, inputClass, useAction } from "./ui";
+import { BrowseTools, type ToolRow } from "./BrowseTools";
+import { Button, ErrorText, inputClass, useAction } from "./ui";
 
-type MyTool = FunctionReturnType<typeof api.tools.mine>[number];
 type Draft = {
   name: string;
   category: Category;
@@ -37,83 +36,44 @@ const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export function MyListings() {
-  const tools = useQuery(api.tools.mine);
-  const remove = useMutation(api.tools.remove);
-  const [editing, setEditing] = useState<MyTool | null>(null);
-  const action = useAction();
+  const [editing, setEditing] = useState<ToolRow | null>(null);
+  const [adding, setAdding] = useState(false);
+  const formOpen = adding || editing !== null;
 
   return (
-    <section className="grid gap-8 md:grid-cols-[1fr_1.2fr]">
-      <ToolForm key={editing?._id ?? "new"} editing={editing} onDone={() => setEditing(null)} />
-
-      <div>
-        <h2 className="mb-3 font-medium">Your tools</h2>
-        <ErrorText error={action.error} />
-        {tools === undefined ? (
-          <p className="text-muted">Loading…</p>
-        ) : tools.length === 0 ? (
-          <Empty
-            action={
-              <Button onClick={() => document.getElementById("tool-name")?.focus()}>
-                List your first tool
-              </Button>
-            }
-          >
-            You haven&apos;t listed any tools yet. Add your first drill or ladder to help a
-            neighbor!
-          </Empty>
-        ) : (
-          <ul className="space-y-2">
-            {tools.map((tool) => (
-              <li
-                key={tool._id}
-                className="flex gap-3 rounded-card border border-line bg-surface shadow-card p-3"
-              >
-                {tool.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- Convex storage URLs are signed per request
-                  <img src={tool.photoUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
-                ) : (
-                  <div className="h-16 w-16 rounded-lg bg-paper" />
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <Link
-                      href={`/dashboard/tools/${tool._id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {tool.name}
-                    </Link>
-                    <AvailabilityBadge availability={tool.availability} />
-                  </div>
-                  <p className="text-xs text-muted">
-                    {CATEGORY_LABELS[tool.category]} · {tool.condition}
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <Button variant="ghost" onClick={() => setEditing(tool)}>
-                      Edit
-                    </Button>
-                    <Button
-                      variant="danger"
-                      disabled={action.pending}
-                      onClick={() => {
-                        if (confirm(`Delete "${tool.name}"?`))
-                          action.run(() => remove({ toolId: tool._id }));
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+    <section className="space-y-6">
+      <div className="flex justify-end">
+        {!formOpen && (
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" aria-hidden /> List a tool
+          </Button>
         )}
       </div>
+      {formOpen && (
+        <div className="mx-auto max-w-2xl">
+          <ToolForm
+            key={editing?._id ?? "new"}
+            editing={editing}
+            onDone={() => {
+              setEditing(null);
+              setAdding(false);
+            }}
+          />
+        </div>
+      )}
+      <BrowseTools
+        mine
+        onEdit={(tool) => {
+          setAdding(false);
+          setEditing(tool);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
     </section>
   );
 }
 
-function ToolForm({ editing, onDone }: { editing: MyTool | null; onDone: () => void }) {
+function ToolForm({ editing, onDone }: { editing: ToolRow | null; onDone: () => void }) {
   const create = useMutation(api.tools.create);
   const update = useMutation(api.tools.update);
   const generateUploadUrl = useMutation(api.tools.generateUploadUrl);

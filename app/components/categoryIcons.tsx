@@ -19,3 +19,14 @@ export const CATEGORY_ICONS: Record<Category, LucideIcon> = {
   cleaning: SprayCan,
   other: Package,
 };
+
+/** Each category gets its own "front door" color. Ink text reads at 7:1+ on all of them. */
+export const CATEGORY_DOORS: Record<Category, string> = {
+  power_tools: "bg-sun",
+  hand_tools: "bg-sky",
+  garden: "bg-lav",
+  kitchen: "bg-coral",
+  camping: "bg-sky",
+  cleaning: "bg-lav",
+  other: "bg-sun",
+};

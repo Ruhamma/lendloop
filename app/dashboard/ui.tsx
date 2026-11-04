@@ -2,6 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { Star } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -108,12 +109,23 @@ export function LoanStatusBadge({ status, overdue }: { status: string; overdue: 
 export function AvailabilityBadge({
   availability,
 }: {
-  availability: { status: "available" | "on_loan"; until: string | null };
+  availability: { status: "available" | "on_loan"; until: string | null; overdue?: boolean };
 }) {
-  return availability.status === "available" ? (
-    <Badge tone="green">Available</Badge>
+  if (availability.status === "available") return <Badge tone="green">Available</Badge>;
+  return availability.overdue ? (
+    <Badge tone="red" pulse>
+      Overdue · was due {formatDate(availability.until!)}
+    </Badge>
   ) : (
     <Badge tone="blue">On loan · back {formatDate(availability.until!)}</Badge>
+  );
+}
+
+/** Whole days between a past ISO date and today (UTC). */
+export function daysSince(iso: string) {
+  return Math.max(
+    0,
+    Math.round((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(iso)) / 86_400_000),
   );
 }
 
@@ -160,15 +172,18 @@ export function ErrorText({ error }: { error: string | null }) {
 export function Empty({
   icon,
   action,
+  pip = true,
   children,
 }: {
   icon?: ReactNode;
   action?: ReactNode;
+  /** Show Pip with the tape measure, looking around for something to borrow. */
+  pip?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-surface/60 px-6 py-10 text-center text-muted">
-      {icon}
+      {pip ? <Image src="/mascot/pip-tape-measure.png" alt="" width={180} height={125} /> : icon}
       <p className="max-w-sm">{children}</p>
       {action}
     </div>

@@ -302,3 +302,195 @@ describe("pickup details (staged disclosure)", () => {
     expect((await ben.query(api.loans.myRequests, {}))[0].pickup).toEqual(moved);
   });
 });
+
+describe("collection queries (pagination, search, filters)", () => {
+  const page = (n: number, cursor: string | null = null) => ({ numItems: n, cursor });
+
+  test("tools.browse pages through results and searches by name", async () => {
+    const { ana, ben } = await setup();
+    for (const name of ["Ladder", "Hedge trimmer", "Tent", "Leaf blower"]) {
+      await ana.mutation(api.tools.create, {
+        name,
+        neighborhood: "Bole",
+        category: name === "Tent" ? "camping" : "garden",
+        condition: "good",
+        description: "x",
+      });
+    }
+    // setup() already listed a drill, so there are 5 tools.
+    const first = await ben.query(api.tools.browse, { paginationOpts: page(2) });
+    expect(first.page).toHaveLength(2);
+    expect(first.isDone).toBe(false);
+    const rest = await ben.query(api.tools.browse, {
+      paginationOpts: page(10, first.continueCursor),
+    });
+    expect(first.page.length + rest.page.length).toBe(5);
+
+    const hits = await ben.query(api.tools.browse, { search: "ladder", paginationOpts: page(10) });
+    expect(hits.page.map((t) => t.name)).toEqual(["Ladder"]);
+
+    const camping = await ben.query(api.tools.browse, {
+      category: "camping",
+      paginationOpts: page(10),
+    });
+    expect(camping.page.map((t) => t.name)).toEqual(["Tent"]);
+
+    const byName = await ben.query(api.tools.browse, { sort: "name", paginationOpts: page(10) });
+    expect(byName.page.map((t) => t.name)).toEqual([...byName.page.map((t) => t.name)].sort());
+  });
+
+  test("mine only returns the viewer's tools", async () => {
+    const { ben } = await setup();
+    await ben.mutation(api.tools.create, {
+      name: "Tent",
+      neighborhood: "Bole",
+      category: "camping",
+      condition: "good",
+      description: "x",
+    });
+    const mine = await ben.query(api.tools.browse, { mine: true, paginationOpts: page(10) });
+    expect(mine.page.map((t) => [t.name, t.isMine])).toEqual([["Tent", true]]);
+  });
+
+  test("cards show the next booking (dates only)", async () => {
+    const { t, ana, ben, drill } = await setup();
+    const loanId = await ben.mutation(api.loans.request, {
+      toolId: drill,
+      startDate: iso(5),
+      endDate: iso(7),
+    });
+    await ana.mutation(api.loans.decide, { loanId, approve: true, pickup: PICKUP });
+    const [pub] = await t.query(api.tools.publicList, {});
+    expect(pub.nextBooking).toEqual({ startDate: iso(5), endDate: iso(7) });
+    expect(JSON.stringify(pub)).not.toContain("ben");
+  });
+
+  test("loans.page filters by status, and only admins can list every loan", async () => {
+    const { ana, ben, admin, drill } = await setup();
+    const a = await ben.mutation(api.loans.request, {
+      toolId: drill,
+      startDate: iso(1),
+      endDate: iso(2),
+    });
+    await ana.mutation(api.loans.decide, { loanId: a, approve: true, pickup: PICKUP });
+    const tent = await ana.mutation(api.tools.create, {
+      name: "Tent",
+      neighborhood: "Bole",
+      category: "camping",
+      condition: "good",
+      description: "x",
+    });
+    await ben.mutation(api.loans.request, { toolId: tent, startDate: iso(3), endDate: iso(4) });
+
+    const pending = await ben.query(api.loans.page, {
+      role: "borrower",
+      status: "pending",
+      paginationOpts: page(10),
+    });
+    expect(pending.page.map((l) => l.toolName)).toEqual(["Tent"]);
+    const incoming = await ana.query(api.loans.page, { role: "owner", paginationOpts: page(10) });
+    expect(incoming.page).toHaveLength(2);
+
+    await expect(
+      ben.query(api.loans.page, { role: "all", paginationOpts: page(10) }),
+    ).rejects.toThrow("Admins only");
+    const all = await admin.query(api.loans.page, { role: "all", paginationOpts: page(10) });
+    expect(all.page).toHaveLength(2);
+  });
+});
+
+describe("admin activity log", () => {
+  test("merges admin actions, loan changes and automations; admins only", async () => {
+    const { t, ana, ben, admin, drill } = await setup();
+    const loanId = await ben.mutation(api.loans.request, {
+      toolId: drill,
+      startDate: iso(1),
+      endDate: iso(2),
+    });
+    await t.mutation(internal.automation.record, {
+      loanId,
+      kind: "notification",
+      status: "sent",
+      key: `notify:${loanId}:pending:owner`,
+    });
+    const me = await ben.query(api.users.me, {});
+    await admin.mutation(api.users.setTrustedLender, { userId: me!._id, trusted: true });
+
+    await expect(
+      ana.query(api.activity.feed, { kind: "all", offset: 0, pageSize: 10 }),
+    ).rejects.toThrow("Admins only");
+    const all = await admin.query(api.activity.feed, { kind: "all", offset: 0, pageSize: 10 });
+    expect(new Set(all.entries.map((e) => e.kind))).toEqual(
+      new Set(["admin", "loan", "automation"]),
+    );
+    const onlyAdmin = await admin.query(api.activity.feed, {
+      kind: "admin",
+      offset: 0,
+      pageSize: 10,
+    });
+    expect(onlyAdmin.entries.every((e) => e.kind === "admin")).toBe(true);
+  });
+});
+
+describe("admin search", () => {
+  const page = (n: number) => ({ numItems: n, cursor: null });
+
+  test("all loans can be searched by tool, borrower or owner name", async () => {
+    const { ana, ben, admin, drill } = await setup();
+    const loanId = await ben.mutation(api.loans.request, {
+      toolId: drill,
+      startDate: iso(1),
+      endDate: iso(2),
+    });
+    for (const term of ["drill", "ben", "ana"]) {
+      const hits = await admin.query(api.loans.page, {
+        role: "all",
+        search: term,
+        paginationOpts: page(10),
+      });
+      expect(hits.page.map((l) => l._id)).toEqual([loanId]);
+    }
+    const none = await admin.query(api.loans.page, {
+      role: "all",
+      search: "kayak",
+      paginationOpts: page(10),
+    });
+    expect(none.page).toHaveLength(0);
+    // A borrower's search never reaches other people's loans.
+    const asAna = await ana.query(api.loans.page, {
+      role: "borrower",
+      search: "drill",
+      paginationOpts: page(10),
+    });
+    expect(asAna.page).toHaveLength(0);
+  });
+
+  test("neighbors are searchable by name, admins only", async () => {
+    const { ana, admin } = await setup();
+    const hits = await admin.query(api.users.page, { search: "ben", paginationOpts: page(10) });
+    expect(hits.page.map((u) => u.name)).toEqual(["ben"]);
+    await expect(ana.query(api.users.page, { paginationOpts: page(10) })).rejects.toThrow(
+      "Admins only",
+    );
+  });
+
+  test("the audit log pages by offset without repeating entries", async () => {
+    const { ana, ben, admin, drill } = await setup();
+    for (let i = 0; i < 3; i++) {
+      const loanId = await ben.mutation(api.loans.request, {
+        toolId: drill,
+        startDate: iso(10 + i * 3),
+        endDate: iso(11 + i * 3),
+      });
+      await ana.mutation(api.loans.decide, { loanId, approve: false });
+    }
+    const first = await admin.query(api.activity.feed, { kind: "loan", offset: 0, pageSize: 4 });
+    const second = await admin.query(api.activity.feed, { kind: "loan", offset: 4, pageSize: 4 });
+    expect(first.entries).toHaveLength(4);
+    expect(first.hasMore).toBe(true);
+    expect(second.entries).toHaveLength(2);
+    expect(second.hasMore).toBe(false);
+    const ids = [...first.entries, ...second.entries].map((e) => e.id);
+    expect(new Set(ids).size).toBe(6);
+  });
+});

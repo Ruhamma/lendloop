@@ -1,53 +1,269 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActionLink,
   LoanStatusBadge,
+  Loading,
   Button,
   Empty,
   ErrorText,
   StarPicker,
   formatDate,
   inputClass,
+  daysSince,
   timeAgo,
   useAction,
 } from "./ui";
+import {
+  FilterPills,
+  Pager,
+  SearchField,
+  ViewToggle,
+  useDebounced,
+  usePagedQuery,
+  useViewMode,
+} from "./collection";
 
-export type Loan = FunctionReturnType<typeof api.loans.all>[number];
+export type Loan = FunctionReturnType<typeof api.loans.page>["page"][number];
 
 /** "My requests" (borrower) and "Incoming requests" (owner) share one list. */
-export function LoanList({ view }: { view: "borrower" | "owner" }) {
-  const loans = useQuery(view === "borrower" ? api.loans.myRequests : api.loans.incoming);
+const STATUS_FILTERS = [
+  { value: "" as const, label: "All" },
+  { value: "pending" as const, label: "Pending" },
+  { value: "approved" as const, label: "Active" },
+  { value: "overdue" as const, label: "Overdue" },
+  { value: "returned" as const, label: "Returned" },
+  { value: "declined" as const, label: "Declined" },
+  { value: "cancelled" as const, label: "Cancelled" },
+];
+type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 
-  if (loans === undefined) return <p className="text-muted">Loading…</p>;
-  if (loans.length === 0) {
-    return (
-      <Empty
-        action={
-          view === "borrower" ? (
-            <ActionLink href="/dashboard?tab=browse">Browse tools</ActionLink>
-          ) : (
-            <ActionLink href="/dashboard?tab=listings">Add a tool or a photo</ActionLink>
-          )
-        }
-      >
-        {view === "borrower"
-          ? "You haven't asked to borrow anything yet. See what your neighbors are lending."
-          : "No one has asked to borrow your tools yet. Listings with a photo and a clear description get noticed first."}
-      </Empty>
-    );
-  }
+/**
+ * Paginated loans for one side ("borrower", "owner") or all of them (admin), with a status
+ * filter and a cards/table toggle. In the table, "Open" shows the full card (actions,
+ * pickup, history) in a dialog.
+ */
+export function LoanList({ view }: { view: "borrower" | "owner" | "admin" }) {
+  const [status, setStatus] = useState<StatusFilter>("");
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [mode, setMode] = useViewMode(`loans-${view}`, view === "admin" ? "table" : "cards");
+  const [opened, setOpened] = useState<Loan | null>(null);
+  const role = view === "admin" ? "all" : view;
+
+  const [term, setTerm] = useState("");
+  const search = useDebounced(term);
+  const [pageSize, setPageSize] = useState(10);
+  const pager = usePagedQuery(
+    api.loans.page,
+    { role, status: status || undefined, sort, search },
+    pageSize,
+  );
+  const results = pager.rows;
+  // Keep the dialog in sync with live data (e.g. after approving inside it).
+  const openLoan = opened ? (results.find((l) => l._id === opened._id) ?? opened) : null;
+
   return (
-    <ul className="space-y-2">
-      {loans.map((loan) => (
-        <LoanRow key={loan._id} loan={loan} view={view} />
-      ))}
-    </ul>
+    <section>
+      <div className="mb-3">
+        <SearchField
+          value={term}
+          onChange={setTerm}
+          placeholder={
+            view === "admin"
+              ? "Search by tool, borrower or owner…"
+              : view === "owner"
+                ? "Search by tool or borrower…"
+                : "Search by tool or owner…"
+          }
+        />
+      </div>
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <FilterPills
+          label="Filter by status"
+          options={STATUS_FILTERS}
+          value={status}
+          onChange={setStatus}
+        />
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className={`${inputClass} mt-0 w-auto py-1.5`}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+          <ViewToggle mode={mode} onChange={setMode} />
+        </div>
+      </div>
+
+      {pager.loading ? (
+        <Loading />
+      ) : results.length === 0 ? (
+        status || search ? (
+          <Empty
+            pip={false}
+            action={
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setStatus("");
+                  setTerm("");
+                }}
+              >
+                Clear search and filters
+              </Button>
+            }
+          >
+            No loans match that search or status.
+          </Empty>
+        ) : (
+          <Empty
+            pip={view !== "admin"}
+            action={
+              view === "borrower" ? (
+                <ActionLink href="/dashboard?tab=browse">Browse tools</ActionLink>
+              ) : view === "owner" ? (
+                <ActionLink href="/dashboard?tab=listings">Add a tool or a photo</ActionLink>
+              ) : undefined
+            }
+          >
+            {view === "borrower"
+              ? "You haven't asked to borrow anything yet. See what your neighbors are lending."
+              : view === "owner"
+                ? "No one has asked to borrow your tools yet. Listings with a photo and a clear description get noticed first."
+                : "No loans yet."}
+          </Empty>
+        )
+      ) : mode === "cards" ? (
+        <ul className="grid gap-4 lg:grid-cols-2">
+          {results.map((loan) => (
+            <LoanRow key={loan._id} loan={loan} view={view} />
+          ))}
+        </ul>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Tool</th>
+                <th className="px-4 py-3 font-medium">
+                  {view === "borrower"
+                    ? "Owner"
+                    : view === "owner"
+                      ? "Borrower"
+                      : "Borrower → owner"}
+                </th>
+                <th className="px-4 py-3 font-medium">Dates</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Last automation</th>
+                <th className="px-4 py-3 font-medium">
+                  <span className="sr-only">Open</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {results.map((loan) => (
+                <tr key={loan._id} className="hover:bg-paper/60">
+                  <td className="px-4 py-3 font-medium">
+                    <Link href={`/dashboard/tools/${loan.toolId}`} className="hover:text-brand">
+                      {loan.toolName}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {view === "borrower"
+                      ? loan.ownerName
+                      : view === "owner"
+                        ? loan.borrowerName
+                        : `${loan.borrowerName} → ${loan.ownerName}`}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
+                    {formatDate(loan.startDate)} – {formatDate(loan.endDate)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted">
+                    {loan.lastAutomation
+                      ? `${loan.lastAutomation.kind === "overdue_reminder" ? "Reminder" : "Notification"} ${loan.lastAutomation.status} · ${timeAgo(loan.lastAutomation.at)}`
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setOpened(loan)}>
+                      Open
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Pager
+        page={pager.page}
+        from={pager.from}
+        count={results.length}
+        hasPrev={pager.hasPrev}
+        hasNext={pager.hasNext}
+        onPrev={pager.prev}
+        onNext={pager.next}
+        pageSize={pageSize}
+        onPageSize={setPageSize}
+      />
+
+      <LoanDialog loan={openLoan} view={view} onClose={() => setOpened(null)} />
+    </section>
+  );
+}
+
+/** Full loan card (actions, pickup, history) in a native dialog, opened from the table. */
+function LoanDialog({
+  loan,
+  view,
+  onClose,
+}: {
+  loan: Loan | null;
+  view: "borrower" | "owner" | "admin";
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (loan && !d.open) d.showModal();
+    if (!loan && d.open) d.close();
+  }, [loan]);
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      className="m-auto w-[min(36rem,calc(100%-2rem))] rounded-card bg-transparent p-0 backdrop:bg-ink/40"
+    >
+      {loan && (
+        <div className="space-y-2">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => ref.current?.close()}
+              className="rounded-full bg-white px-3 py-1 text-sm font-medium shadow-card"
+            >
+              Close
+            </button>
+          </div>
+          <ul>
+            <LoanRow loan={loan} view={view} />
+          </ul>
+        </div>
+      )}
+    </dialog>
   );
 }
 
@@ -60,6 +276,15 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
   const [editingPickup, setEditingPickup] = useState(false);
   const action = useAction();
 
+  // Stamp the card when its status changes while you're looking at it (not on first load).
+  // Adjusting state during render on a prop change is React's recommended pattern here.
+  const [seenStatus, setSeenStatus] = useState(loan.status);
+  const [stamp, setStamp] = useState<keyof typeof STAMPS | null>(null);
+  if (seenStatus !== loan.status) {
+    setSeenStatus(loan.status);
+    if (loan.status in STAMPS) setStamp(loan.status as keyof typeof STAMPS);
+  }
+
   const who =
     view === "borrower"
       ? `from ${loan.ownerName}`
@@ -68,7 +293,17 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
         : `${loan.borrowerName} borrowing from ${loan.ownerName}`;
 
   return (
-    <li className="rounded-card border border-line bg-surface shadow-card p-4">
+    <li className="relative overflow-hidden rounded-card border border-line bg-surface p-4 shadow-card">
+      {stamp && (
+        <span
+          key={stamp}
+          className={`stamp rounded-md border-4 px-4 py-1 font-display text-3xl tracking-widest ${STAMPS[stamp].className}`}
+          aria-hidden
+          onAnimationEnd={() => setStamp(null)}
+        >
+          {STAMPS[stamp].label}
+        </span>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link href={`/dashboard/tools/${loan.toolId}`} className="font-medium hover:underline">
@@ -79,10 +314,30 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
             {formatDate(loan.startDate)} → {formatDate(loan.endDate)}
           </p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
         </div>
       </div>
+
+      {loan.overdue && (
+        <div
+          role="status"
+          className="mt-3 flex items-center gap-3 rounded-xl border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger"
+        >
+          <Image src="/mascot/pip-alarm.png" alt="" width={40} height={31} />
+          <span>
+            <strong>
+              Overdue by {daysSince(loan.endDate)} day{daysSince(loan.endDate) === 1 ? "" : "s"}
+            </strong>{" "}
+            · was due {formatDate(loan.endDate)}.{" "}
+            {view === "owner"
+              ? "A daily reminder goes to the borrower until you mark it returned."
+              : view === "borrower"
+                ? "Please return it or message the owner."
+                : "Daily reminders are being sent."}
+          </span>
+        </div>
+      )}
 
       {loan.note && (
         <p className="mt-2 rounded-lg bg-paper px-3 py-2 text-sm text-ink">“{loan.note}”</p>
@@ -191,6 +446,13 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
     </li>
   );
 }
+
+/** Library checkout stamps: indigo ink for progress, red ink for a refusal. */
+const STAMPS = {
+  approved: { label: "APPROVED", className: "border-brand text-brand bg-surface/80" },
+  returned: { label: "RETURNED", className: "border-brand text-brand bg-surface/80" },
+  declined: { label: "DECLINED", className: "border-accent text-accent bg-surface/80" },
+} as const;
 
 type Pickup = { kind: "home" | "meetup"; details: string };
 

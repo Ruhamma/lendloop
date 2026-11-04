@@ -13,7 +13,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <ClerkProvider
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
           appearance={{
+            cssLayerName: "clerk",
             variables: {
               colorPrimary: "#3a36a8",
               colorForeground: "#1b1a3a",

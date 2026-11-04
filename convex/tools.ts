@@ -7,6 +7,7 @@ import { audit, logLoanEvent, ratingSummary } from "./lib/history";
 import { notify } from "./lib/notifications";
 import { rateLimit } from "./lib/rateLimit";
 import { cleanText } from "./lib/text";
+import { collectionArgs, searchTerm } from "./lib/collection";
 import { category, condition } from "./schema";
 
 const MAX_NAME = 80;
@@ -15,18 +16,33 @@ const MAX_NEIGHBORHOOD = 60;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-/** "on_loan" when an approved, unreturned loan has started; otherwise "available". */
+/**
+ * "on_loan" when an approved, unreturned loan has started; otherwise "available".
+ * `nextBooking` is the next approved loan that hasn't started yet (dates only, never who),
+ * so cards can say "Booked Nov 20–22" before someone requests clashing dates.
+ */
 async function availability(ctx: QueryCtx, tool: Doc<"tools">) {
   const today = todayIso();
-  const approved = await ctx.db
-    .query("loans")
-    .withIndex("by_tool", (q) => q.eq("toolId", tool._id))
-    .filter((q) => q.eq(q.field("status"), "approved"))
-    .collect();
+  const approved = (
+    await ctx.db
+      .query("loans")
+      .withIndex("by_tool", (q) => q.eq("toolId", tool._id))
+      .filter((q) => q.eq(q.field("status"), "approved"))
+      .collect()
+  ).sort((a, b) => a.startDate.localeCompare(b.startDate));
   const current = approved.find((l) => l.startDate <= today);
+  const upcoming = approved.find((l) => l.startDate > today);
+  const nextBooking = upcoming
+    ? { startDate: upcoming.startDate, endDate: upcoming.endDate }
+    : null;
   return current
-    ? { status: "on_loan" as const, until: current.endDate }
-    : { status: "available" as const, until: null };
+    ? {
+        status: "on_loan" as const,
+        until: current.endDate,
+        overdue: current.endDate < today,
+        nextBooking,
+      }
+    : { status: "available" as const, until: null, overdue: false, nextBooking };
 }
 
 async function photoUrl(ctx: QueryCtx, tool: Doc<"tools">) {
@@ -63,14 +79,86 @@ export const publicList = query({
     const tools = await ctx.db.query("tools").order("desc").take(100);
     const result = [];
     for (const tool of tools) {
-      const { status } = await availability(ctx, tool);
+      const { status, nextBooking } = await availability(ctx, tool);
       if (status === "available") {
-        result.push({ _id: tool._id, name: tool.name, category: tool.category });
+        result.push({ _id: tool._id, name: tool.name, category: tool.category, nextBooking });
       }
     }
     return result;
   },
 });
+
+/**
+ * Paginated, searchable tool list for the dashboard (collection query). Full-text search on
+ * the name uses the search index (results come back by relevance); otherwise tools are
+ * listed by date or name from an index. `mine` limits the list to the viewer's tools.
+ */
+export const browse = query({
+  args: { ...collectionArgs, category: v.optional(category), mine: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const viewer = await requireViewer(ctx);
+    const search = searchTerm(args.search);
+
+    const page = search
+      ? await ctx.db
+          .query("tools")
+          .withSearchIndex("search_name", (q) => {
+            let s = q.search("name", search);
+            if (args.category) s = s.eq("category", args.category);
+            if (args.mine) s = s.eq("ownerId", viewer._id);
+            return s;
+          })
+          .paginate(args.paginationOpts)
+      : args.mine
+        ? await ctx.db
+            .query("tools")
+            .withIndex("by_owner", (q) => q.eq("ownerId", viewer._id))
+            .order(args.sort === "oldest" ? "asc" : "desc")
+            .filter((q) => (args.category ? q.eq(q.field("category"), args.category) : true))
+            .paginate(args.paginationOpts)
+        : args.sort === "name"
+          ? await ctx.db
+              .query("tools")
+              .withIndex("by_name")
+              .filter((q) => (args.category ? q.eq(q.field("category"), args.category) : true))
+              .paginate(args.paginationOpts)
+          : args.category
+            ? await ctx.db
+                .query("tools")
+                .withIndex("by_category", (q) => q.eq("category", args.category!))
+                .order(args.sort === "oldest" ? "asc" : "desc")
+                .paginate(args.paginationOpts)
+            : await ctx.db
+                .query("tools")
+                .order(args.sort === "oldest" ? "asc" : "desc")
+                .paginate(args.paginationOpts);
+
+    return {
+      ...page,
+      page: await Promise.all(page.page.map((tool) => presentTool(ctx, tool, viewer._id))),
+    };
+  },
+});
+
+async function presentTool(ctx: QueryCtx, tool: Doc<"tools">, viewerId: Id<"users">) {
+  const owner = await ctx.db.get(tool.ownerId);
+  return {
+    _id: tool._id,
+    _creationTime: tool._creationTime,
+    name: tool.name,
+    category: tool.category,
+    condition: tool.condition,
+    description: tool.description,
+    neighborhood: tool.neighborhood ?? null,
+    photoId: tool.photoId,
+    photoUrl: await photoUrl(ctx, tool),
+    ownerName: owner?.name ?? "Unknown",
+    ownerTrusted: owner?.trustedLender ?? false,
+    ownerRating: await ratingSummary(ctx, tool.ownerId),
+    isMine: tool.ownerId === viewerId,
+    availability: await availability(ctx, tool),
+  };
+}
 
 export const list = query({
   args: { category: v.optional(category) },

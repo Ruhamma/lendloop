@@ -3,6 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { getViewer, requireAdmin } from "./lib/auth";
 import { audit, ratingSummary } from "./lib/history";
 import { optionalText } from "./lib/text";
+import { collectionArgs, searchTerm } from "./lib/collection";
 
 /** Upsert the signed-in Clerk user. Role is never taken from the client. */
 export const store = mutation({
@@ -78,6 +79,37 @@ export const setTrustedLender = mutation({
       user.name,
       optionalText(reason, "Reason", 200),
     );
+  },
+});
+
+/** Admins: neighbors, searchable by name, paginated (collection query). */
+export const page = query({
+  args: collectionArgs,
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const search = searchTerm(args.search);
+    const result = search
+      ? await ctx.db
+          .query("users")
+          .withSearchIndex("search_name", (q) => q.search("name", search))
+          .paginate(args.paginationOpts)
+      : await ctx.db
+          .query("users")
+          .order(args.sort === "oldest" ? "asc" : "desc")
+          .paginate(args.paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map(async (u) => ({
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          trustedLender: u.trustedLender,
+          rating: await ratingSummary(ctx, u._id),
+        })),
+      ),
+    };
   },
 });
 

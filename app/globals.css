@@ -1,25 +1,35 @@
+/* Clerk injects its styles into the "clerk" layer (see layout.tsx), below our utilities. */
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 @import "@fontsource/young-serif";
 @import "@fontsource-variable/atkinson-hyperlegible-next";
 
 /*
- * LendLoop design tokens, "library card": stamp-ink indigo on cool paper, with the red of
- * the tag's string as a sparing accent (icons, badges, large text; never body copy).
+ * LendLoop design tokens: white pages with neutral grays, stamp-ink indigo for the brand,
+ * the tag string's red as a sparing accent, and sunny "front door" colors (yellow, sky,
+ * coral, lavender) for category blocks. Ink reads at 7:1+ on every door color. The only
+ * cream is the hero's soft gradient.
  * Contrast (WCAG): ink on paper 15.5:1, muted on paper 4.8:1, white on brand 9.2:1,
- * brand on paper 8.6:1. Accent on paper is 3.8:1, so it is never used for small text.
+ * brand on paper 8.5:1. Accent on paper is 3.8:1, so it is never used for small text.
  */
 @theme {
-  --color-paper: #f5f6fa;
+  --color-paper: #f6f6f7;
+  --color-cream: #fdf1dc;
   --color-surface: #ffffff;
   --color-ink: #1b1a3a;
   --color-ink-soft: #46456e;
   --color-muted: #6b6c80;
-  --color-line: #dcdde8;
+  --color-line: #e9e9ec;
   --color-brand: #3a36a8;
   --color-brand-hover: #2e2a8c;
   --color-brand-soft: #e4e3f7;
   --color-accent: #e2462f;
   --color-accent-soft: #fce9e6;
+  --color-sun: #ffc93c;
+  --color-sun-soft: #fff1c7;
+  --color-sky: #7cc4ff;
+  --color-coral: #ff8a7a;
+  --color-lav: #c9c6f5;
   --color-info: #1d5bbf;
   --color-info-soft: #e6effc;
   --color-ok: #127a4a;
@@ -38,7 +48,7 @@
 }
 
 body {
-  background: var(--color-paper);
+  background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
@@ -59,9 +69,181 @@ h3,
   outline-offset: 2px;
 }
 
+/* ---------------------------------------------------------------------------
+ * Motion. Every animated element's resting style is its final state, so the
+ * reduced-motion rule at the bottom can switch animations off without hiding anything.
+ * ------------------------------------------------------------------------- */
+
+/* Logo: the tag swings on its string, pivoting at the grommet. */
+@keyframes tag-swing {
+  0% {
+    transform: rotate(0deg);
+  }
+  18% {
+    transform: rotate(14deg);
+  }
+  38% {
+    transform: rotate(-9deg);
+  }
+  58% {
+    transform: rotate(5deg);
+  }
+  78% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes tag-swing-again {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(10deg);
+  }
+  55% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+.tag-swing {
+  transform-box: view-box;
+  transform-origin: 32px 18px;
+  animation: tag-swing 1.6s cubic-bezier(0.3, 0.7, 0.4, 1) 0.15s both;
+}
+.group:hover .tag-swing {
+  animation: tag-swing-again 1s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+/* Loan cards: a library checkout stamp presses on, holds, then lifts away. */
+@keyframes stamp {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-16deg) scale(2.4);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-9deg) scale(0.92);
+  }
+  32% {
+    transform: translate(-50%, -50%) rotate(-10deg) scale(1.04);
+  }
+  40%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-10deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-10deg) scale(1);
+  }
+}
+.stamp {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-10deg);
+  opacity: 0;
+  pointer-events: none;
+  animation: stamp 1.9s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes rise-in {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Search dropdown: drops in from just under the field. */
+@keyframes search-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.search-pop {
+  transform-origin: top center;
+  animation: search-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Lists: items rise in one after another. Set --i on each item. */
+.rise-in {
+  animation: rise-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 45ms);
+}
+
+/* Splash: logo swings, the name reveals, then the curtain lifts. First visit per session only. */
+@keyframes splash-word {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+@keyframes splash-out {
+  to {
+    transform: translateY(-100%);
+  }
+}
+.splash {
+  animation: splash-out 0.8s cubic-bezier(0.7, 0, 0.3, 1) 2.6s both;
+}
+.splash-word {
+  animation: splash-word 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
+}
+/* Pip pops up and gives a little wave. */
+@keyframes pip-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.splash-pip {
+  animation: pip-pop 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s both;
+}
+.splash-tagline {
+  animation: rise-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 1.6s both;
+}
+.no-splash .splash {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* With reduced motion there is no splash at all, rather than a static one blocking the page. */
+@media (prefers-reduced-motion: reduce) {
+  .splash {
+    display: none;
   }
 }

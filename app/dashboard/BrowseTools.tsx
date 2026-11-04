@@ -1,13 +1,23 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { BadgeCheck, MapPin, Search, Trash2 } from "lucide-react";
+import { useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { BadgeCheck, CalendarClock, MapPin, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/convex/lib/constants";
-import { CATEGORY_ICONS } from "../components/categoryIcons";
+import { CATEGORY_DOORS, CATEGORY_ICONS } from "../components/categoryIcons";
+import {
+  FilterPills,
+  Pager,
+  SearchField,
+  ViewToggle,
+  useDebounced,
+  usePagedQuery,
+  useViewMode,
+} from "./collection";
 import {
   ActionLink,
   AvailabilityBadge,
@@ -16,86 +26,95 @@ import {
   Loading,
   Stars,
   TextPromptDialog,
+  formatDate,
   inputClass,
 } from "./ui";
 
-export function BrowseTools({ isAdmin }: { isAdmin: boolean }) {
+export type ToolRow = FunctionReturnType<typeof api.tools.browse>["page"][number];
+
+const SORTS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "name", label: "Name A–Z" },
+] as const;
+
+/**
+ * Paginated tool list with search, category filter, sort and a cards/table toggle.
+ * `mine` shows only the viewer's tools with edit/delete; otherwise admins can remove any.
+ */
+export function BrowseTools({
+  isAdmin = false,
+  mine = false,
+  onEdit,
+}: {
+  isAdmin?: boolean;
+  mine?: boolean;
+  onEdit?: (tool: ToolRow) => void;
+}) {
   const [category, setCategory] = useState<Category | "">("");
-  const [search, setSearch] = useState("");
-  const [removing, setRemoving] = useState<{ id: Id<"tools">; name: string } | null>(null);
-  const tools = useQuery(api.tools.list, category ? { category } : {});
+  const [sort, setSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [term, setTerm] = useState("");
+  const search = useDebounced(term);
+  const [view, setView] = useViewMode(mine ? "mine" : "browse", mine ? "table" : "cards");
+  const [removing, setRemoving] = useState<{ id: Id<"tools">; name: string; own: boolean } | null>(
+    null,
+  );
   const remove = useMutation(api.tools.remove);
 
-  const term = search.trim().toLowerCase();
-  const shown = tools?.filter(
-    (t) =>
-      !term || t.name.toLowerCase().includes(term) || t.description.toLowerCase().includes(term),
+  const [pageSize, setPageSize] = useState(10);
+  const pager = usePagedQuery(
+    api.tools.browse,
+    { search, category: category || undefined, sort, mine },
+    pageSize,
   );
+  const results = pager.rows;
+
+  const filtered = Boolean(search || category);
 
   return (
     <section>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 mt-0.5 h-4 w-4 -translate-y-1/2 text-muted"
-            aria-hidden
-          />
-          <input
-            type="search"
-            placeholder="Search tools…"
-            aria-label="Search tools"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={`${inputClass} pl-9`}
-          />
-        </div>
-        <div
-          className="flex gap-2 overflow-x-auto pb-1"
-          role="group"
-          aria-label="Filter by category"
-        >
-          {(["", ...CATEGORIES] as const).map((c) => {
-            const Icon = c ? CATEGORY_ICONS[c] : null;
-            const active = category === c;
-            return (
-              <button
-                key={c || "all"}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setCategory(c)}
-                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${
-                  active
-                    ? "bg-brand text-white"
-                    : "border border-line bg-surface text-muted hover:text-ink"
-                }`}
-              >
-                {Icon && <Icon className="h-4 w-4" aria-hidden />}
-                {c ? CATEGORY_LABELS[c] : "All"}
-              </button>
-            );
-          })}
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <SearchField value={term} onChange={setTerm} placeholder="Search tools by name…" />
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Sort"
+            value={sort}
+            disabled={Boolean(search)}
+            title={search ? "Search results are sorted by relevance" : undefined}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className={`${inputClass} mt-0 w-auto py-1.5`}
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <ViewToggle mode={view} onChange={setView} />
         </div>
       </div>
+      <div className="mb-6">
+        <FilterPills
+          label="Filter by category"
+          value={category}
+          onChange={setCategory}
+          options={[
+            { value: "" as const, label: "All" },
+            ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] })),
+          ]}
+        />
+      </div>
 
-      {shown === undefined ? (
+      {pager.loading ? (
         <Loading />
-      ) : shown.length === 0 ? (
-        tools?.length === 0 ? (
+      ) : results.length === 0 ? (
+        filtered ? (
           <Empty
-            icon={<Search className="h-6 w-6" aria-hidden />}
-            action={<ActionLink href="/dashboard?tab=listings">List the first tool</ActionLink>}
-          >
-            No tools in the neighborhood yet. Be the first to lend something, even a ladder helps
-            someone this weekend.
-          </Empty>
-        ) : (
-          <Empty
-            icon={<Search className="h-6 w-6" aria-hidden />}
             action={
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setSearch("");
+                  setTerm("");
                   setCategory("");
                 }}
               >
@@ -105,88 +124,283 @@ export function BrowseTools({ isAdmin }: { isAdmin: boolean }) {
           >
             No tools match that search or category.
           </Empty>
+        ) : (
+          <Empty action={<ActionLink href="/dashboard?tab=listings">List a tool</ActionLink>}>
+            {mine
+              ? "You haven't listed any tools yet. Add your first drill or ladder to help a neighbor!"
+              : "No tools in the neighborhood yet. Be the first to lend something."}
+          </Empty>
         )
-      ) : (
-        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((tool) => {
-            const Icon = CATEGORY_ICONS[tool.category];
-            return (
-              <li
-                key={tool._id}
-                className="group flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card transition-shadow hover:shadow-lift"
-              >
-                <Link href={`/dashboard/tools/${tool._id}`} className="flex flex-1 flex-col">
-                  <div className="relative">
-                    {tool.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Convex storage URLs are signed per request
-                      <img
-                        src={tool.photoUrl}
-                        alt=""
-                        className="aspect-[4/3] w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-[4/3] items-center justify-center bg-brand-soft text-brand">
-                        <Icon className="h-12 w-12" aria-hidden />
-                      </div>
-                    )}
-                    <span className="absolute left-3 top-3">
-                      <AvailabilityBadge availability={tool.availability} />
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1.5 p-4">
-                    <h3 className="text-lg font-bold leading-tight group-hover:text-brand">
-                      {tool.name}
-                    </h3>
-                    <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                      {tool.neighborhood && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5" aria-hidden /> {tool.neighborhood}
-                        </span>
-                      )}
-                      <span>{CATEGORY_LABELS[tool.category]}</span>
-                      <span className="capitalize">· {tool.condition}</span>
-                    </p>
-                    <div className="mt-auto flex items-center justify-between pt-2 text-sm">
-                      <span className="inline-flex items-center gap-1 font-medium">
-                        {tool.isMine ? "Yours" : tool.ownerName}
-                        {tool.ownerTrusted && (
-                          <BadgeCheck className="h-4 w-4 text-brand" aria-label="Trusted Lender" />
-                        )}
-                      </span>
-                      {tool.ownerRating && (
-                        <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
-                      )}
-                    </div>
-                  </div>
-                </Link>
-                {isAdmin && !tool.isMine && (
-                  <div className="border-t border-line px-4 py-2">
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => setRemoving({ id: tool._id, name: tool.name })}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden /> Remove listing
-                    </Button>
-                  </div>
-                )}
-              </li>
-            );
-          })}
+      ) : view === "cards" ? (
+        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {results.map((tool, i) => (
+            <ToolCard
+              key={tool._id}
+              tool={tool}
+              index={i}
+              actions={
+                <RowActions
+                  tool={tool}
+                  isAdmin={isAdmin}
+                  mine={mine}
+                  onEdit={onEdit}
+                  onRemove={setRemoving}
+                />
+              }
+            />
+          ))}
         </ul>
+      ) : (
+        <ToolTable
+          tools={results}
+          renderActions={(tool) => (
+            <RowActions
+              tool={tool}
+              isAdmin={isAdmin}
+              mine={mine}
+              onEdit={onEdit}
+              onRemove={setRemoving}
+            />
+          )}
+        />
       )}
+
+      <Pager
+        page={pager.page}
+        from={pager.from}
+        count={results.length}
+        hasPrev={pager.hasPrev}
+        hasNext={pager.hasNext}
+        onPrev={pager.prev}
+        onNext={pager.next}
+        pageSize={pageSize}
+        onPageSize={setPageSize}
+      />
 
       <TextPromptDialog
         open={removing !== null}
-        title={`Remove "${removing?.name ?? ""}"?`}
-        description="The owner's open requests are cancelled. Your reason is saved in the audit log."
-        placeholder="e.g. Duplicate listing, prohibited item…"
-        required
+        title={removing?.own ? `Delete "${removing.name}"?` : `Remove "${removing?.name ?? ""}"?`}
+        description={
+          removing?.own
+            ? "Open requests for it are cancelled. You can't undo this."
+            : "The owner's open requests are cancelled. Your reason is saved in the audit log."
+        }
+        placeholder={removing?.own ? "Optional note" : "e.g. Duplicate listing, prohibited item…"}
+        required={!removing?.own}
         danger
-        confirmLabel="Remove listing"
-        onConfirm={(reason) => remove({ toolId: removing!.id, reason })}
+        confirmLabel={removing?.own ? "Delete" : "Remove listing"}
+        onConfirm={(reason) =>
+          remove(removing!.own ? { toolId: removing!.id } : { toolId: removing!.id, reason })
+        }
         onClose={() => setRemoving(null)}
       />
     </section>
+  );
+}
+
+function RowActions({
+  tool,
+  isAdmin,
+  mine,
+  onEdit,
+  onRemove,
+}: {
+  tool: ToolRow;
+  isAdmin: boolean;
+  mine: boolean;
+  onEdit?: (tool: ToolRow) => void;
+  onRemove: (r: { id: Id<"tools">; name: string; own: boolean }) => void;
+}) {
+  if (mine && tool.isMine) {
+    return (
+      <div className="flex gap-2">
+        {onEdit && (
+          <Button size="sm" variant="ghost" onClick={() => onEdit(tool)}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => onRemove({ id: tool._id, name: tool.name, own: true })}
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
+        </Button>
+      </div>
+    );
+  }
+  if (isAdmin && !tool.isMine) {
+    return (
+      <Button
+        size="sm"
+        variant="danger"
+        onClick={() => onRemove({ id: tool._id, name: tool.name, own: false })}
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden /> Remove
+      </Button>
+    );
+  }
+  return null;
+}
+
+/** Shown when a tool has no photo: its category "door" color with a large icon. */
+export function ToolArt({
+  tool,
+  className = "",
+  iconClass = "h-14 w-14",
+}: {
+  tool: { photoUrl: string | null; category: Category; name: string };
+  className?: string;
+  iconClass?: string;
+}) {
+  const Icon = CATEGORY_ICONS[tool.category];
+  return tool.photoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element -- Convex storage URLs are signed per request
+    <img src={tool.photoUrl} alt={tool.name} className={`object-cover ${className}`} />
+  ) : (
+    <div
+      className={`flex items-center justify-center text-ink/80 ${CATEGORY_DOORS[tool.category]} ${className}`}
+      role="img"
+      aria-label={`${CATEGORY_LABELS[tool.category]} (no photo yet)`}
+    >
+      <Icon className={iconClass} strokeWidth={1.3} aria-hidden />
+    </div>
+  );
+}
+
+/** "Booked Nov 20–22" so people see clashes before requesting. Dates only, never who. */
+export function BookingNote({ availability }: { availability: ToolRow["availability"] }) {
+  const next = availability.nextBooking;
+  if (availability.status === "on_loan" || !next) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-warn">
+      <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+      Booked {formatDate(next.startDate)}–{formatDate(next.endDate)}
+    </span>
+  );
+}
+
+function ToolCard({
+  tool,
+  index,
+  actions,
+}: {
+  tool: ToolRow;
+  index: number;
+  actions: React.ReactNode;
+}) {
+  return (
+    <li
+      style={{ "--i": index } as React.CSSProperties}
+      className="rise-in group flex flex-col rounded-[1.5rem] bg-white p-2 ring-1 ring-black/5 transition duration-300 hover:-translate-y-1 hover:shadow-lift"
+    >
+      <Link href={`/dashboard/tools/${tool._id}`} className="flex flex-1 flex-col">
+        <div className="relative overflow-hidden rounded-[1.1rem]">
+          <ToolArt
+            tool={tool}
+            className="aspect-[4/3] w-full transition-transform duration-500 group-hover:scale-105"
+          />
+          <span className="absolute left-2.5 top-2.5">
+            <AvailabilityBadge availability={tool.availability} />
+          </span>
+        </div>
+        <div className="flex flex-1 flex-col gap-1 px-2 pb-1 pt-3">
+          <h3 className="font-sans text-base font-semibold leading-tight group-hover:text-brand">
+            {tool.name}
+          </h3>
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+            {tool.neighborhood && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3" aria-hidden /> {tool.neighborhood}
+              </span>
+            )}
+            <span>{CATEGORY_LABELS[tool.category]}</span>
+            <span className="capitalize">· {tool.condition}</span>
+          </p>
+          <BookingNote availability={tool.availability} />
+          <div className="mt-auto flex items-center justify-between pt-2 text-xs">
+            <span className="inline-flex items-center gap-1 font-medium text-ink-soft">
+              {tool.isMine ? "Yours" : tool.ownerName}
+              {tool.ownerTrusted && (
+                <BadgeCheck className="h-3.5 w-3.5 text-brand" aria-label="Trusted Lender" />
+              )}
+            </span>
+            {tool.ownerRating && (
+              <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
+            )}
+          </div>
+        </div>
+      </Link>
+      {actions && <div className="border-t border-line px-2 pt-2">{actions}</div>}
+    </li>
+  );
+}
+
+function ToolTable({
+  tools,
+  renderActions,
+}: {
+  tools: ToolRow[];
+  renderActions: (tool: ToolRow) => React.ReactNode;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/5">
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
+          <tr>
+            <th className="px-4 py-3 font-medium">Tool</th>
+            <th className="px-4 py-3 font-medium">Category</th>
+            <th className="px-4 py-3 font-medium">Owner</th>
+            <th className="px-4 py-3 font-medium">Availability</th>
+            <th className="px-4 py-3 font-medium">Rating</th>
+            <th className="px-4 py-3 font-medium">
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {tools.map((tool) => (
+            <tr key={tool._id} className="hover:bg-paper/60">
+              <td className="px-4 py-3">
+                <Link
+                  href={`/dashboard/tools/${tool._id}`}
+                  className="flex items-center gap-3 font-medium hover:text-brand"
+                >
+                  <ToolArt
+                    tool={tool}
+                    className="h-10 w-10 shrink-0 rounded-lg"
+                    iconClass="h-5 w-5"
+                  />
+                  <span>
+                    {tool.name}
+                    {tool.neighborhood && (
+                      <span className="block text-xs font-normal text-muted">
+                        {tool.neighborhood}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </td>
+              <td className="px-4 py-3 text-ink-soft">{CATEGORY_LABELS[tool.category]}</td>
+              <td className="px-4 py-3 text-ink-soft">{tool.isMine ? "You" : tool.ownerName}</td>
+              <td className="px-4 py-3">
+                <div className="flex flex-col items-start gap-1">
+                  <AvailabilityBadge availability={tool.availability} />
+                  <BookingNote availability={tool.availability} />
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                {tool.ownerRating ? (
+                  <Stars value={tool.ownerRating.average} count={tool.ownerRating.count} />
+                ) : (
+                  <span className="text-xs text-muted">—</span>
+                )}
+              </td>
+              <td className="px-4 py-3 text-right">{renderActions(tool)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
