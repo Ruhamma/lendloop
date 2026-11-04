@@ -29,7 +29,9 @@ jobs:
         run: npx prettier --check app convex e2e proxy.ts scripts
 
       - name: Type-check
-        run: npx tsc --noEmit
+        # Next.js generates route/layout types (LayoutProps etc.) during dev or build;
+        # typegen creates them on their own so tsc can run before the build.
+        run: npx next typegen && npx tsc --noEmit
 
       - name: Unit + Convex function tests
         run: npm test
