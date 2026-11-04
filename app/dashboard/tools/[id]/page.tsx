@@ -6,7 +6,15 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { CATEGORY_LABELS } from "@/convex/lib/constants";
-import { Badge, Button, ErrorText, Stars, formatDate, inputClass, useAction } from "../../ui";
+import {
+  AvailabilityBadge,
+  Button,
+  ErrorText,
+  Stars,
+  formatDate,
+  inputClass,
+  useAction,
+} from "../../ui";
 import { BookingCalendar } from "./BookingCalendar";
 
 export default function ToolPage() {
@@ -62,11 +70,7 @@ export default function ToolPage() {
         <div>
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-2xl font-semibold">{tool.name}</h1>
-            <Badge tone={tool.availability.status}>
-              {tool.availability.status === "available"
-                ? "Available"
-                : `Back ${formatDate(tool.availability.until!)}`}
-            </Badge>
+            <AvailabilityBadge availability={tool.availability} />
           </div>
           <p className="mt-1 text-sm text-muted">
             {tool.neighborhood && <>📍 {tool.neighborhood} · </>}

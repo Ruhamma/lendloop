@@ -6,7 +6,8 @@ import { api } from "@/convex/_generated/api";
 import Link from "next/link";
 import { useState } from "react";
 import {
-  Badge,
+  ActionLink,
+  LoanStatusBadge,
   Button,
   Empty,
   ErrorText,
@@ -26,10 +27,18 @@ export function LoanList({ view }: { view: "borrower" | "owner" }) {
   if (loans === undefined) return <p className="text-muted">Loading…</p>;
   if (loans.length === 0) {
     return (
-      <Empty>
+      <Empty
+        action={
+          view === "borrower" ? (
+            <ActionLink href="/dashboard?tab=browse">Browse tools</ActionLink>
+          ) : (
+            <ActionLink href="/dashboard?tab=listings">Add a tool or a photo</ActionLink>
+          )
+        }
+      >
         {view === "borrower"
-          ? "You haven't asked to borrow anything yet."
-          : "No one has asked to borrow your tools yet."}
+          ? "You haven't asked to borrow anything yet. See what your neighbors are lending."
+          : "No one has asked to borrow your tools yet. Listings with a photo and a clear description get noticed first."}
       </Empty>
     );
   }
@@ -71,8 +80,7 @@ export function LoanRow({ loan, view }: { loan: Loan; view: "borrower" | "owner"
           </p>
         </div>
         <div className="flex gap-1">
-          <Badge tone={loan.status}>{loan.status}</Badge>
-          {loan.overdue && <Badge tone="overdue">overdue</Badge>}
+          <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
         </div>
       </div>
 

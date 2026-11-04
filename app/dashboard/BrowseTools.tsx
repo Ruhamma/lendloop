@@ -9,13 +9,13 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/convex/lib/constants";
 import { CATEGORY_ICONS } from "../components/categoryIcons";
 import {
-  Badge,
+  ActionLink,
+  AvailabilityBadge,
   Button,
   Empty,
   Loading,
   Stars,
   TextPromptDialog,
-  formatDate,
   inputClass,
 } from "./ui";
 
@@ -80,9 +80,32 @@ export function BrowseTools({ isAdmin }: { isAdmin: boolean }) {
       {shown === undefined ? (
         <Loading />
       ) : shown.length === 0 ? (
-        <Empty icon={<Search className="h-6 w-6" aria-hidden />}>
-          No tools match. Try another category or search.
-        </Empty>
+        tools?.length === 0 ? (
+          <Empty
+            icon={<Search className="h-6 w-6" aria-hidden />}
+            action={<ActionLink href="/dashboard?tab=listings">List the first tool</ActionLink>}
+          >
+            No tools in the neighborhood yet. Be the first to lend something, even a ladder helps
+            someone this weekend.
+          </Empty>
+        ) : (
+          <Empty
+            icon={<Search className="h-6 w-6" aria-hidden />}
+            action={
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSearch("");
+                  setCategory("");
+                }}
+              >
+                Clear search and filters
+              </Button>
+            }
+          >
+            No tools match that search or category.
+          </Empty>
+        )
       ) : (
         <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((tool) => {
@@ -107,11 +130,7 @@ export function BrowseTools({ isAdmin }: { isAdmin: boolean }) {
                       </div>
                     )}
                     <span className="absolute left-3 top-3">
-                      <Badge tone={tool.availability.status}>
-                        {tool.availability.status === "available"
-                          ? "Available"
-                          : `Back ${formatDate(tool.availability.until!)}`}
-                      </Badge>
+                      <AvailabilityBadge availability={tool.availability} />
                     </span>
                   </div>
                   <div className="flex flex-1 flex-col gap-1.5 p-4">

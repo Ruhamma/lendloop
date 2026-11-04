@@ -269,6 +269,8 @@ Roles are enforced in Convex functions. The UI only hides buttons a user can't u
 
 ## What I'd change for production
 
+The full plan, with an AWS deployment in mind (SCIM and admin MFA, an immutable audit archive on S3 Object Lock, SQS between Convex and n8n, edge rate limiting with WAF, Secrets Manager, n8n on ECS behind an ALB, Terraform), is in **[PRODUCTION_CONSIDERATIONS.md](PRODUCTION_CONSIDERATIONS.md)**. The short version:
+
 - **Strict CSP with nonces**, as described above.
 - **Server-side photo processing:** metadata stripping currently happens in the browser, which a modified client could skip. In production I'd also re-encode on the server (a Node action with `sharp`) and generate thumbnails.
 

@@ -2,6 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { Star } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export function errorMessage(e: unknown) {
@@ -48,24 +49,71 @@ export function formatDate(iso: string) {
   });
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  available: "bg-ok-soft text-ok",
-  on_loan: "bg-warn-soft text-warn",
-  pending: "bg-brand-soft text-brand",
-  approved: "bg-ok-soft text-ok",
-  declined: "bg-line text-muted",
-  cancelled: "bg-line text-muted",
-  returned: "bg-line text-muted",
-  overdue: "bg-danger-soft text-danger",
-};
+// Status colors: green = available, amber = waiting on someone, blue = in progress,
+// red = needs attention now, gray = finished. All pairs pass WCAG AA (4.5:1+).
+const TONES = {
+  green: "bg-ok-soft text-ok",
+  amber: "bg-warn-soft text-warn",
+  blue: "bg-info-soft text-info",
+  red: "bg-danger-soft text-danger",
+  gray: "bg-paper text-ink-soft ring-1 ring-inset ring-line",
+} as const;
+type Tone = keyof typeof TONES;
 
-export function Badge({ tone, children }: { tone: string; children: ReactNode }) {
+export function Badge({
+  tone,
+  pulse = false,
+  children,
+}: {
+  tone: Tone;
+  pulse?: boolean;
+  children: ReactNode;
+}) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${BADGE_STYLES[tone] ?? "bg-line text-muted"}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONES[tone]}`}
     >
+      {pulse && (
+        // The ping animation is switched off for people who prefer reduced motion (globals.css).
+        <span className="relative flex h-2 w-2" aria-hidden>
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
+        </span>
+      )}
       {children}
     </span>
+  );
+}
+
+const LOAN_STATUS: Record<string, { tone: Tone; label: string }> = {
+  pending: { tone: "amber", label: "Pending approval" },
+  approved: { tone: "blue", label: "Active loan" },
+  returned: { tone: "gray", label: "Returned" },
+  declined: { tone: "gray", label: "Declined" },
+  cancelled: { tone: "gray", label: "Cancelled" },
+};
+
+export function LoanStatusBadge({ status, overdue }: { status: string; overdue: boolean }) {
+  if (overdue) {
+    return (
+      <Badge tone="red" pulse>
+        Overdue
+      </Badge>
+    );
+  }
+  const { tone, label } = LOAN_STATUS[status] ?? { tone: "gray" as const, label: status };
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
+export function AvailabilityBadge({
+  availability,
+}: {
+  availability: { status: "available" | "on_loan"; until: string | null };
+}) {
+  return availability.status === "available" ? (
+    <Badge tone="green">Available</Badge>
+  ) : (
+    <Badge tone="blue">On loan · back {formatDate(availability.until!)}</Badge>
   );
 }
 
@@ -108,12 +156,34 @@ export function ErrorText({ error }: { error: string | null }) {
   );
 }
 
-export function Empty({ icon, children }: { icon?: ReactNode; children: ReactNode }) {
+/** Empty list: say what's missing, why it matters, and offer the next step. */
+export function Empty({
+  icon,
+  action,
+  children,
+}: {
+  icon?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-line bg-surface/60 px-6 py-10 text-center text-muted">
+    <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-surface/60 px-6 py-10 text-center text-muted">
       {icon}
-      <p>{children}</p>
+      <p className="max-w-sm">{children}</p>
+      {action}
     </div>
+  );
+}
+
+/** Link styled as a primary button, for empty-state calls to action. */
+export function ActionLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+    >
+      {children}
+    </Link>
   );
 }
 

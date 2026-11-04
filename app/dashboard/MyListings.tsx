@@ -14,7 +14,7 @@ import {
   type Condition,
 } from "@/convex/lib/constants";
 import { preparePhoto } from "./preparePhoto";
-import { Badge, Button, Empty, ErrorText, inputClass, useAction } from "./ui";
+import { AvailabilityBadge, Button, Empty, ErrorText, inputClass, useAction } from "./ui";
 
 type MyTool = FunctionReturnType<typeof api.tools.mine>[number];
 type Draft = {
@@ -52,7 +52,16 @@ export function MyListings() {
         {tools === undefined ? (
           <p className="text-muted">Loading…</p>
         ) : tools.length === 0 ? (
-          <Empty>You haven&apos;t listed anything yet.</Empty>
+          <Empty
+            action={
+              <Button onClick={() => document.getElementById("tool-name")?.focus()}>
+                List your first tool
+              </Button>
+            }
+          >
+            You haven&apos;t listed any tools yet. Add your first drill or ladder to help a
+            neighbor!
+          </Empty>
         ) : (
           <ul className="space-y-2">
             {tools.map((tool) => (
@@ -74,9 +83,7 @@ export function MyListings() {
                     >
                       {tool.name}
                     </Link>
-                    <Badge tone={tool.availability.status}>
-                      {tool.availability.status === "available" ? "Available" : "On loan"}
-                    </Badge>
+                    <AvailabilityBadge availability={tool.availability} />
                   </div>
                   <p className="text-xs text-muted">
                     {CATEGORY_LABELS[tool.category]} · {tool.condition}
@@ -170,6 +177,7 @@ function ToolForm({ editing, onDone }: { editing: MyTool | null; onDone: () => v
       <label className="block text-sm">
         Name
         <input
+          id="tool-name"
           required
           maxLength={80}
           value={draft.name}
