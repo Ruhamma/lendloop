@@ -94,6 +94,7 @@ Open http://localhost:5678 and create the owner account. The three LendLoop work
 npm run dev                                                 # http://localhost:3000
 npx convex run users:makeAdmin '{"email":"you@example.com"}'  # after your first sign-in
 npx convex run seed:demo                                    # optional demo data, incl. an overdue loan
+npx convex run seed:showcase '{"confirm":"replace"}'        # full showcase: 8 neighbors, 23 tools, loans in every state
 ```
 
 ### Tests
